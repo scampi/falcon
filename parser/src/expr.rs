@@ -196,6 +196,9 @@ fn parse_pow_expr(input: CompleteStr, left_expr: Expr) -> IResult<CompleteStr, E
                 Expr::UnaryPlus(plus) => {
                     Expr::UnaryPlus(Box::new(Expr::Pow(plus, Box::new(next_expr))))
                 }
+                Expr::LogicalNot(plus) => {
+                    Expr::LogicalNot(Box::new(Expr::Pow(plus, Box::new(next_expr))))
+                }
                 _ => Expr::Pow(Box::new(left_expr), Box::new(next_expr)),
             })
         ),
@@ -1445,6 +1448,15 @@ mod tests {
                     "_b".to_string(),
                 ))))),
             ),
+        );
+        assert_expr(
+            "! $0 ^ 2",
+            Expr::LogicalNot(Box::new(Expr::Pow(
+                Box::new(Expr::LValue(LValueType::Dollar(Box::new(Expr::Number(
+                    0f64,
+                ))))),
+                Box::new(Expr::Number(2f64)),
+            ))),
         );
     }
 
