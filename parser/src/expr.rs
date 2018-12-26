@@ -154,11 +154,11 @@ impl fmt::Display for Expr {
     }
 }
 
-pub fn parse_expr(input: CompleteStr) -> IResult<CompleteStr, Expr> {
+crate fn parse_expr(input: CompleteStr) -> IResult<CompleteStr, Expr> {
     do_parse_expr(input, false)
 }
 
-pub fn parse_print_expr(input: CompleteStr) -> IResult<CompleteStr, Expr> {
+crate fn parse_print_expr(input: CompleteStr) -> IResult<CompleteStr, Expr> {
     do_parse_expr(input, true)
 }
 
@@ -453,33 +453,37 @@ fn parse_conditional_expr(input: CompleteStr, print_expr: bool, left_expr: Expr)
     }
 }
 
-named!(pub parse_expr_list<CompleteStr, ExprList>,
+crate fn parse_expr_list(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
     map!(
+        input,
         separated_list!(ws!(char!(',')), parse_expr),
         |exprs| ExprList(exprs)
     )
-);
+}
 
-named!(pub parse_expr_list1<CompleteStr, ExprList>,
+crate fn parse_expr_list1(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
     map!(
+        input,
         separated_nonempty_list!(ws!(char!(',')), parse_expr),
         |exprs| ExprList(exprs)
     )
-);
+}
 
-named!(pub parse_print_expr_list<CompleteStr, ExprList>,
+crate fn parse_print_expr_list(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
     map!(
+        input,
         separated_list!(ws!(char!(',')), parse_print_expr),
         |exprs| ExprList(exprs)
     )
-);
+}
 
-named!(pub parse_print_expr_list1<CompleteStr, ExprList>,
+crate fn parse_print_expr_list1(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
     map!(
+        input,
         separated_nonempty_list!(ws!(char!(',')), parse_print_expr),
         |exprs| ExprList(exprs)
     )
-);
+}
 
 named!(leaf<CompleteStr, Expr>,
     alt!(

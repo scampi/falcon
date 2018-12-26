@@ -113,8 +113,9 @@ impl fmt::Display for Stmt {
     }
 }
 
-named!(pub parse_stmt<CompleteStr, Stmt>,
+crate fn parse_stmt(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     alt!(
+        input,
         parse_terminatable
         | parse_if_else
         | parse_while
@@ -123,10 +124,12 @@ named!(pub parse_stmt<CompleteStr, Stmt>,
         | parse_for_in
         | parse_stmt_list => { |stmts| Stmt::Block(stmts) }
     )
-);
+}
 
-named!(pub parse_stmt_list<CompleteStr, StmtList>,
+#[rustfmt::skip]
+crate fn parse_stmt_list(input: CompleteStr) -> IResult<CompleteStr, StmtList> {
     do_parse!(
+        input,
         ws!(char!('{')) >>
         stmts: separated_list!(ws!(char!(';')), parse_stmt) >>
         // allow trailing semicolon
@@ -134,7 +137,7 @@ named!(pub parse_stmt_list<CompleteStr, StmtList>,
         ws!(char!('}')) >>
         (StmtList(stmts))
     )
-);
+}
 
 named!(parse_if_else<CompleteStr, Stmt>,
     do_parse!(

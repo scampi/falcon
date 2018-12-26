@@ -1,25 +1,27 @@
 use nom::{types::CompleteStr, *};
 
-named!(pub parse_name<CompleteStr, String>,
+crate fn parse_name(input: CompleteStr) -> IResult<CompleteStr, String> {
     map!(
+        input,
         verify!(
             take_while1!(|c: char| (c == '_' || c.is_alphanumeric()) && !c.is_whitespace()),
             |name: CompleteStr| is_valid_start(&name) && !is_builtin(&name) && !is_keyword(&name)
         ),
         |name: CompleteStr| name.to_string()
     )
-);
+}
 
 // In opposite to the grammar, the func_name is either an user function or a builtin one
-named!(pub parse_func_name<CompleteStr, String>,
+crate fn parse_func_name(input: CompleteStr) -> IResult<CompleteStr, String> {
     map!(
+        input,
         verify!(
             take_while1!(|c: char| (c == '_' || c.is_alphanumeric()) && !c.is_whitespace()),
             |name: CompleteStr| is_valid_start(&name) && !is_keyword(&name)
         ),
         |name: CompleteStr| name.to_string()
     )
-);
+}
 
 fn is_valid_start(name: &str) -> bool {
     if let Some(c) = name.chars().next() {
@@ -47,8 +49,9 @@ fn is_keyword(name: &str) -> bool {
     }
 }
 
-named!(pub parse_string<CompleteStr, String>,
+crate fn parse_string(input: CompleteStr) -> IResult<CompleteStr, String> {
     map!(
+        input,
         delimited!(
             char!('"'),
             escaped!(
@@ -73,10 +76,11 @@ named!(pub parse_string<CompleteStr, String>,
         ),
         |lit| lit.to_string()
     )
-);
+}
 
-named!(pub parse_regexp<CompleteStr, String>,
+crate fn parse_regexp(input: CompleteStr) -> IResult<CompleteStr, String> {
     map!(
+        input,
         delimited!(
             char!('/'),
             escaped!(
@@ -101,7 +105,7 @@ named!(pub parse_regexp<CompleteStr, String>,
         ),
         |ere| ere.to_string()
     )
-);
+}
 
 fn is_oct_digit(c: char) -> bool {
     match c {

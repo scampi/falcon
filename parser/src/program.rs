@@ -38,7 +38,7 @@ impl fmt::Display for Item {
             Item::Action(stmts) => write!(f, "{}", stmts),
             Item::PatternAction(pattern, action) => write!(f, "{} {}", pattern, action),
             Item::FunctionDef(name, args, stmts) => {
-                write!(f, "function(")?;
+                write!(f, "function {}(", name)?;
                 for arg in args {
                     write!(f, "{}, ", arg)?;
                 }
@@ -92,7 +92,10 @@ named!(parse_pattern<CompleteStr, Pattern>,
     alt!(
         ws!(tag!("BEGIN")) => { |_| Pattern::Begin }
         | ws!(tag!("END")) => { |_| Pattern::End }
-        | parse_expr_list1 => { |exprs| Pattern::Exprs(exprs) }
+        | separated_pair!(parse_expr, ws!(char!(',')), parse_expr) => {
+            |(e1, e2)| Pattern::Exprs(ExprList(vec![e1, e2]))
+        }
+        | parse_expr => { |expr| Pattern::Exprs(ExprList(vec![expr])) }
     )
 );
 
