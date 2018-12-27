@@ -35,6 +35,21 @@ impl Eval for Expr {
                 Ok(Value::compare(op, &lvalue, &rvalue))
             },
             Expr::Concat(l, r) => Ok(Value::String(format!("{}{}", l.eval(cxt)?, r.eval(cxt)?))),
+            Expr::LogicalAnd(l, r) => {
+                if l.eval(cxt)?.as_bool() {
+                    Ok(Value::from(r.eval(cxt)?.as_bool()))
+                } else {
+                    Ok(Value::from(false))
+                }
+            },
+            Expr::LogicalOr(l, r) => {
+                if l.eval(cxt)?.as_bool() {
+                    Ok(Value::from(true))
+                } else {
+                    Ok(Value::from(r.eval(cxt)?.as_bool()))
+                }
+            },
+            Expr::LogicalNot(e) => Ok(Value::from(!e.eval(cxt)?.as_bool())),
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
             Expr::UnaryPlus(up) => up.eval(cxt),
             Expr::Grouping(g) => g.eval(cxt),
@@ -178,5 +193,55 @@ mod tests {
         let res = expr.eval(&cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("aaa0".to_owned()));
+
+        let expr = parse_expr_str("1 2");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("12".to_owned()));
+    }
+
+    #[test]
+    fn logical_operation() {
+        let cxt = Context::new();
+
+        let expr = parse_expr_str("1 && 2");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str(r#""" && 2"#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(false));
+
+        let expr = parse_expr_str(r#"1 && "2""#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str("1 && 0");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(false));
+
+        let expr = parse_expr_str("1 < 2 && 3");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str("0 || 1");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str("1 || 0");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str("!(1 || 0)");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(false));
     }
 }

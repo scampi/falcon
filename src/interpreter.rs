@@ -85,6 +85,14 @@ impl fmt::Display for Value {
 }
 
 impl Value {
+    fn as_bool(&self) -> bool {
+        match self {
+            Value::Bool(v) => *v,
+            Value::String(s) => !s.is_empty(),
+            Value::Number(n) => *n != 0.0,
+        }
+    }
+
     fn as_number(&self) -> f64 {
         match self {
             Value::Bool(v) => {
