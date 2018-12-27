@@ -34,11 +34,12 @@ impl Eval for Expr {
                 let rvalue = r.eval(cxt)?;
                 Ok(Value::compare(op, &lvalue, &rvalue))
             },
+            Expr::Concat(l, r) => Ok(Value::String(format!("{}{}", l.eval(cxt)?, r.eval(cxt)?))),
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
             Expr::UnaryPlus(up) => up.eval(cxt),
             Expr::Grouping(g) => g.eval(cxt),
             Expr::Number(n) => Ok(Value::from(*n)),
-            Expr::String(s) => Ok(Value::from(s)),
+            Expr::String(s) => Ok(Value::from(s.to_owned())),
             _ => unimplemented!(),
         }
     }
@@ -157,5 +158,25 @@ mod tests {
         let res = expr.eval(&cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
+    }
+
+    #[test]
+    fn concat() {
+        let cxt = Context::new();
+
+        let expr = parse_expr_str(r#"1 " aaa " 2"#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("1 aaa 2".to_owned()));
+
+        let expr = parse_expr_str(r#""aaa" (1 < 2)"#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("aaa1".to_owned()));
+
+        let expr = parse_expr_str(r#""aaa" (1 == 2)"#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("aaa0".to_owned()));
     }
 }

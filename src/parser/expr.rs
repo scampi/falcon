@@ -1,5 +1,5 @@
 use nom::{types::CompleteStr, *};
-use std::{fmt, str::FromStr};
+use std::fmt;
 
 use crate::parser::util::{parse_func_name, parse_name, parse_regexp, parse_string};
 
