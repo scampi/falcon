@@ -50,6 +50,13 @@ impl Eval for Expr {
                 }
             },
             Expr::LogicalNot(e) => Ok(Value::from(!e.eval(cxt)?.as_bool())),
+            Expr::Conditional(cond, ok, ko) => {
+                if cond.eval(cxt)?.as_bool() {
+                    Ok(Value::from(ok.eval(cxt)?))
+                } else {
+                    Ok(Value::from(ko.eval(cxt)?))
+                }
+            },
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
             Expr::UnaryPlus(up) => up.eval(cxt),
             Expr::Grouping(g) => g.eval(cxt),
@@ -243,5 +250,30 @@ mod tests {
         let res = expr.eval(&cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
+    }
+
+    #[test]
+    fn conditional() {
+        let cxt = Context::new();
+
+        let expr = parse_expr_str(r#"1 == 1 ? "OK" : "KO""#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("OK".to_owned()));
+
+        let expr = parse_expr_str(r#"1 != 1 ? "OK" : "KO""#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("KO".to_owned()));
+
+        let expr = parse_expr_str(r#"(1 == 1 ? "OK" : 2) + 2"#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(2.0));
+
+        let expr = parse_expr_str(r#"(1 < 1 ? "OK" : 2) + 2"#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(4.0));
     }
 }
