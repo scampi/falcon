@@ -1,5 +1,4 @@
-use crate::errors::EvaluationError;
-use crate::parser::expr::LValueType;
+use crate::{errors::EvaluationError, parser::expr::LValueType};
 use std::collections::HashMap;
 
 mod expr;

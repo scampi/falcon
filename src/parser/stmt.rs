@@ -1,8 +1,7 @@
 use nom::{types::CompleteStr, *};
 use std::fmt;
 
-use crate::parser::expr::*;
-use crate::parser::util::parse_name;
+use crate::parser::{expr::*, util::parse_name};
 
 #[derive(Debug, PartialEq)]
 pub struct StmtList(pub Vec<Stmt>);
@@ -71,7 +70,7 @@ impl fmt::Display for Stmt {
                     write!(f, " else {}", ko)?;
                 }
                 Ok(())
-            }
+            },
             Stmt::For(start, until, next, body) => {
                 write!(f, "for (")?;
                 if let Some(start) = start {
@@ -86,7 +85,7 @@ impl fmt::Display for Stmt {
                     write!(f, " {}", next)?;
                 }
                 write!(f, ") {}", body)
-            }
+            },
             Stmt::ForIn(a, b, body) => write!(f, "for ({} in {}) {}", a, b, body),
             Stmt::While(cond, body) => write!(f, "while ({}) {}", cond, body),
             Stmt::DoWhile(cond, body) => write!(f, "do {} while ({})", body, cond),
@@ -100,14 +99,14 @@ impl fmt::Display for Stmt {
                     write!(f, "{}", e)?;
                 }
                 Ok(())
-            }
+            },
             Stmt::Return(e) => {
                 write!(f, "return")?;
                 if let Some(e) = e {
                     write!(f, "{}", e)?;
                 }
                 Ok(())
-            }
+            },
             Stmt::Delete(name, exprs) => write!(f, "delete {}[{}]", name, exprs),
         }
     }

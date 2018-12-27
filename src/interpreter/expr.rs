@@ -1,6 +1,8 @@
-use crate::errors::EvaluationError;
-use crate::interpreter::{Context, Eval, Value};
-use crate::parser::expr::Expr;
+use crate::{
+    errors::EvaluationError,
+    interpreter::{Context, Eval, Value},
+    parser::expr::Expr,
+};
 
 impl Eval for Expr {
     fn eval(&self, cxt: &Context) -> Result<Value, EvaluationError> {
@@ -23,7 +25,7 @@ impl Eval for Expr {
                     return Err(EvaluationError::DivisionByZero);
                 }
                 Ok(Value::Number(l.eval(cxt)?.as_number() / rvalue))
-            }
+            },
             Expr::Mul(l, r) => Ok(Value::Number(
                 l.eval(cxt)?.as_number() * r.eval(cxt)?.as_number(),
             )),

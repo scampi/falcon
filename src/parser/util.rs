@@ -11,7 +11,8 @@ pub fn parse_name(input: CompleteStr) -> IResult<CompleteStr, String> {
     )
 }
 
-// In opposite to the grammar, the func_name is either an user function or a builtin one
+// In opposite to the grammar, the func_name is either an user function or a
+// builtin one
 pub fn parse_func_name(input: CompleteStr) -> IResult<CompleteStr, String> {
     map!(
         input,

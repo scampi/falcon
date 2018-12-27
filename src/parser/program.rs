@@ -1,9 +1,7 @@
 use nom::{types::CompleteStr, *};
 use std::fmt;
 
-use crate::parser::expr::*;
-use crate::parser::stmt::*;
-use crate::parser::util::parse_name;
+use crate::parser::{expr::*, stmt::*, util::parse_name};
 
 #[derive(Debug, PartialEq)]
 pub struct Program {
@@ -43,7 +41,7 @@ impl fmt::Display for Item {
                     write!(f, "{}, ", arg)?;
                 }
                 write!(f, ") {}", stmts)
-            }
+            },
         }
     }
 }
