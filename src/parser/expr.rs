@@ -61,17 +61,28 @@ pub enum CmpOperator {
     GreaterThanOrEqual,
 }
 
-impl FromStr for CmpOperator {
-    type Err = ();
+impl CmpOperator {
+    pub fn compare<T: PartialOrd>(&self, avalue: &T, bvalue: &T) -> bool {
+        match self {
+            CmpOperator::LessThan => avalue < bvalue,
+            CmpOperator::LessThanOrEqual => avalue <= bvalue,
+            CmpOperator::NotEqual => avalue != bvalue,
+            CmpOperator::Equal => avalue == bvalue,
+            CmpOperator::GreaterThan => avalue > bvalue,
+            CmpOperator::GreaterThanOrEqual => avalue >= bvalue,
+        }
+    }
+}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl From<&str> for CmpOperator {
+    fn from(s: &str) -> Self {
         match s {
-            "<" => Ok(CmpOperator::LessThan),
-            "<=" => Ok(CmpOperator::LessThanOrEqual),
-            "!=" => Ok(CmpOperator::NotEqual),
-            "==" => Ok(CmpOperator::Equal),
-            ">" => Ok(CmpOperator::GreaterThan),
-            ">=" => Ok(CmpOperator::GreaterThanOrEqual),
+            "<" => CmpOperator::LessThan,
+            "<=" => CmpOperator::LessThanOrEqual,
+            "!=" => CmpOperator::NotEqual,
+            "==" => CmpOperator::Equal,
+            ">" => CmpOperator::GreaterThan,
+            ">=" => CmpOperator::GreaterThanOrEqual,
             _ => unreachable!(),
         }
     }
@@ -334,7 +345,7 @@ fn parse_comparison_expr(input: CompleteStr, print_expr: bool, left_expr: Expr) 
                 e4: call!(parse_concat_expr, e3) >>
                 (e4)
             ) >>
-            (Expr::Comparison((*op).parse().unwrap(), Box::new(left_expr), Box::new(lower_preceding_expr)))
+            (Expr::Comparison(CmpOperator::from(*op), Box::new(left_expr), Box::new(lower_preceding_expr)))
         ),
         _ => Ok((input, left_expr)),
     }

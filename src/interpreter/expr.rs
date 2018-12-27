@@ -7,16 +7,16 @@ use crate::{
 impl Eval for Expr {
     fn eval(&self, cxt: &Context) -> Result<Value, EvaluationError> {
         match self {
-            Expr::Mod(l, r) => Ok(Value::Number(
+            Expr::Mod(l, r) => Ok(Value::from(
                 l.eval(cxt)?.as_number() % r.eval(cxt)?.as_number(),
             )),
-            Expr::Pow(l, r) => Ok(Value::Number(
+            Expr::Pow(l, r) => Ok(Value::from(
                 l.eval(cxt)?.as_number().powf(r.eval(cxt)?.as_number()),
             )),
-            Expr::Add(l, r) => Ok(Value::Number(
+            Expr::Add(l, r) => Ok(Value::from(
                 l.eval(cxt)?.as_number() + r.eval(cxt)?.as_number(),
             )),
-            Expr::Minus(l, r) => Ok(Value::Number(
+            Expr::Minus(l, r) => Ok(Value::from(
                 l.eval(cxt)?.as_number() - r.eval(cxt)?.as_number(),
             )),
             Expr::Div(l, r) => {
@@ -26,14 +26,19 @@ impl Eval for Expr {
                 }
                 Ok(Value::Number(l.eval(cxt)?.as_number() / rvalue))
             },
-            Expr::Mul(l, r) => Ok(Value::Number(
+            Expr::Mul(l, r) => Ok(Value::from(
                 l.eval(cxt)?.as_number() * r.eval(cxt)?.as_number(),
             )),
-            Expr::UnaryMinus(um) => Ok(Value::Number(-um.eval(cxt)?.as_number())),
+            Expr::Comparison(op, l, r) => {
+                let lvalue = l.eval(cxt)?;
+                let rvalue = r.eval(cxt)?;
+                Ok(Value::compare(op, &lvalue, &rvalue))
+            },
+            Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
             Expr::UnaryPlus(up) => up.eval(cxt),
             Expr::Grouping(g) => g.eval(cxt),
-            Expr::Number(n) => Ok(Value::Number(*n)),
-            Expr::String(s) => Ok(Value::String(s)),
+            Expr::Number(n) => Ok(Value::from(*n)),
+            Expr::String(s) => Ok(Value::from(s)),
             _ => unimplemented!(),
         }
     }
@@ -102,5 +107,55 @@ mod tests {
         let res = expr.eval(&cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), -8.0);
+
+        let expr = parse_expr_str(r#"2 + "3""#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap().as_number(), 5.0);
+    }
+
+    #[test]
+    fn comparison() {
+        let cxt = Context::new();
+
+        let expr = parse_expr_str("2 < 3");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str("2 > 3");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(false));
+
+        let expr = parse_expr_str(r#"2 == "2""#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str(r#""2" == 2"#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str(r#""a" == "b""#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(false));
+
+        let expr = parse_expr_str(r#""1" < "a""#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str(r#""a" < "b""#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = parse_expr_str(r#""a" > "b""#);
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(false));
     }
 }
