@@ -154,6 +154,11 @@ impl fmt::Display for Expr {
     }
 }
 
+pub fn parse_expr_str(input: &str) -> Expr {
+    let complete_input = CompleteStr::from(input);
+    do_parse_expr(complete_input, false).unwrap().1
+}
+
 crate fn parse_expr(input: CompleteStr) -> IResult<CompleteStr, Expr> {
     do_parse_expr(input, false)
 }
@@ -576,34 +581,34 @@ mod tests {
 
     #[test]
     fn number() {
-        assert_expr("42", Expr::Number(42f64));
+        assert_expr("42", Expr::Number(42.0));
     }
 
     #[test]
     fn unary_plus() {
-        assert_expr("+42", Expr::Number(42f64));
+        assert_expr("+42", Expr::Number(42.0));
         assert_expr(
             "+ $0 ^ 2",
             Expr::UnaryPlus(Box::new(Expr::Pow(
                 Box::new(Expr::LValue(LValueType::Dollar(Box::new(Expr::Number(
-                    0f64,
+                    0.0,
                 ))))),
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
             ))),
         );
     }
 
     #[test]
     fn unary_minus() {
-        assert_expr("-42", Expr::UnaryMinus(Box::new(Expr::Number(42f64))));
-        assert_expr("- 42", Expr::UnaryMinus(Box::new(Expr::Number(42f64))));
+        assert_expr("-42", Expr::UnaryMinus(Box::new(Expr::Number(42.0))));
+        assert_expr("- 42", Expr::UnaryMinus(Box::new(Expr::Number(42.0))));
         assert_expr(
             "- $0 ^ 2",
             Expr::UnaryMinus(Box::new(Expr::Pow(
                 Box::new(Expr::LValue(LValueType::Dollar(Box::new(Expr::Number(
-                    0f64,
+                    0.0,
                 ))))),
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
             ))),
         );
         assert_expr(
@@ -620,20 +625,20 @@ mod tests {
         assert_expr(
             "2 ^ 3 ^ 4",
             Expr::Pow(
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
                 Box::new(Expr::Pow(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
         assert_expr(
             "2 ^ - 3 ^ 4",
             Expr::Pow(
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
                 Box::new(Expr::UnaryMinus(Box::new(Expr::Pow(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(4.0)),
                 )))),
             ),
         );
@@ -645,20 +650,20 @@ mod tests {
             "2 * 3 * 4",
             Expr::Mul(
                 Box::new(Expr::Mul(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 * - 3 * 4",
             Expr::Mul(
                 Box::new(Expr::Mul(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3f64)))),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3.0)))),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
     }
@@ -669,20 +674,20 @@ mod tests {
             "2 / 3 / 4",
             Expr::Div(
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 / - 3 / 4",
             Expr::Div(
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3f64)))),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3.0)))),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
     }
@@ -693,20 +698,20 @@ mod tests {
             "2 % 3 % 4",
             Expr::Mod(
                 Box::new(Expr::Mod(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 % - 3 % 4",
             Expr::Mod(
                 Box::new(Expr::Mod(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3f64)))),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3.0)))),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
     }
@@ -717,29 +722,29 @@ mod tests {
             "2 + 3 + 4",
             Expr::Add(
                 Box::new(Expr::Add(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 + - 3 + 4",
             Expr::Add(
                 Box::new(Expr::Add(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3f64)))),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3.0)))),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 + 3 / 4",
             Expr::Add(
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -747,22 +752,22 @@ mod tests {
             "2 / 3 + 4",
             Expr::Add(
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 ^ 5 + 3 * 4",
             Expr::Add(
                 Box::new(Expr::Pow(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(5f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(5.0)),
                 )),
                 Box::new(Expr::Mul(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -770,17 +775,17 @@ mod tests {
             "2 ^ 5 + 3 ^ 2 * 4 ^ 3",
             Expr::Add(
                 Box::new(Expr::Pow(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(5f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(5.0)),
                 )),
                 Box::new(Expr::Mul(
                     Box::new(Expr::Pow(
-                        Box::new(Expr::Number(3f64)),
-                        Box::new(Expr::Number(2f64)),
+                        Box::new(Expr::Number(3.0)),
+                        Box::new(Expr::Number(2.0)),
                     )),
                     Box::new(Expr::Pow(
-                        Box::new(Expr::Number(4f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(4.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                 )),
             ),
@@ -793,29 +798,29 @@ mod tests {
             "2 - 3 - 4",
             Expr::Minus(
                 Box::new(Expr::Minus(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 - - 3 - 4",
             Expr::Minus(
                 Box::new(Expr::Minus(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3f64)))),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::UnaryMinus(Box::new(Expr::Number(3.0)))),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 - 3 / 4",
             Expr::Minus(
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -823,22 +828,22 @@ mod tests {
             "2 / 3 - 4",
             Expr::Minus(
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 ^ 5 - 3 * 4",
             Expr::Minus(
                 Box::new(Expr::Pow(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(5f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(5.0)),
                 )),
                 Box::new(Expr::Mul(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -850,17 +855,17 @@ mod tests {
             "2 - 3 / 1 + 4 * 2 ^ 2",
             Expr::Add(
                 Box::new(Expr::Minus(
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(2.0)),
                     Box::new(Expr::Div(
-                        Box::new(Expr::Number(3f64)),
-                        Box::new(Expr::Number(1f64)),
+                        Box::new(Expr::Number(3.0)),
+                        Box::new(Expr::Number(1.0)),
                     )),
                 )),
                 Box::new(Expr::Mul(
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(4.0)),
                     Box::new(Expr::Pow(
-                        Box::new(Expr::Number(2f64)),
-                        Box::new(Expr::Number(2f64)),
+                        Box::new(Expr::Number(2.0)),
+                        Box::new(Expr::Number(2.0)),
                     )),
                 )),
             ),
@@ -869,10 +874,10 @@ mod tests {
             "2 - 3 + 4",
             Expr::Add(
                 Box::new(Expr::Minus(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
     }
@@ -882,10 +887,10 @@ mod tests {
         assert_expr(
             "2 * 3 ^ 4",
             Expr::Mul(
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
                 Box::new(Expr::Pow(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -893,23 +898,23 @@ mod tests {
             "2 * 3 ^ 4 * 5",
             Expr::Mul(
                 Box::new(Expr::Mul(
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(2.0)),
                     Box::new(Expr::Pow(
-                        Box::new(Expr::Number(3f64)),
-                        Box::new(Expr::Number(4f64)),
+                        Box::new(Expr::Number(3.0)),
+                        Box::new(Expr::Number(4.0)),
                     )),
                 )),
-                Box::new(Expr::Number(5f64)),
+                Box::new(Expr::Number(5.0)),
             ),
         );
         assert_expr(
             "2 ^ 3 * 4",
             Expr::Mul(
                 Box::new(Expr::Pow(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
     }
@@ -919,10 +924,10 @@ mod tests {
         assert_expr(
             "2 / 3 ^ 4",
             Expr::Div(
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
                 Box::new(Expr::Pow(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -930,10 +935,10 @@ mod tests {
             "2 ^ 3 / 4",
             Expr::Div(
                 Box::new(Expr::Pow(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
     }
@@ -944,20 +949,20 @@ mod tests {
             "2 / 3 * 4",
             Expr::Mul(
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
         assert_expr(
             "2 * 3 / 4",
             Expr::Div(
                 Box::new(Expr::Mul(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::Number(4f64)),
+                Box::new(Expr::Number(4.0)),
             ),
         );
     }
@@ -968,12 +973,12 @@ mod tests {
             "2 / 3 4 + 3",
             Expr::Concat(
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
                 Box::new(Expr::Add(
-                    Box::new(Expr::Number(4f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(4.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
         );
@@ -981,12 +986,12 @@ mod tests {
             "2 ^ 3 1 / 4",
             Expr::Concat(
                 Box::new(Expr::Pow(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -994,10 +999,10 @@ mod tests {
             "1 2 3",
             Expr::Concat(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
-                Box::new(Expr::Number(3f64)),
+                Box::new(Expr::Number(3.0)),
             ),
         );
     }
@@ -1008,12 +1013,12 @@ mod tests {
             "1 + 2 == 2 / 3",
             Expr::Equal(
                 Box::new(Expr::Add(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
         );
@@ -1021,17 +1026,17 @@ mod tests {
             "1 2 < 2 / 3 4 + 3",
             Expr::LessThan(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Concat(
                     Box::new(Expr::Div(
-                        Box::new(Expr::Number(2f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(2.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                     Box::new(Expr::Add(
-                        Box::new(Expr::Number(4f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(4.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                 )),
             ),
@@ -1040,17 +1045,17 @@ mod tests {
             "1 2 <= 2 / 3 4 + 3",
             Expr::LessThanOrEqual(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Concat(
                     Box::new(Expr::Div(
-                        Box::new(Expr::Number(2f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(2.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                     Box::new(Expr::Add(
-                        Box::new(Expr::Number(4f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(4.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                 )),
             ),
@@ -1060,17 +1065,17 @@ mod tests {
             Expr::LessThanOrEqual(
                 Box::new(Expr::Concat(
                     Box::new(Expr::Div(
-                        Box::new(Expr::Number(2f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(2.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                     Box::new(Expr::Add(
-                        Box::new(Expr::Number(4f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(4.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                 )),
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
             ),
         );
@@ -1078,12 +1083,12 @@ mod tests {
             "1 2 != 2 3",
             Expr::NotEqual(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
         );
@@ -1091,12 +1096,12 @@ mod tests {
             "1 2 == 2 3",
             Expr::Equal(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
         );
@@ -1104,12 +1109,12 @@ mod tests {
             "1 2 > 2 3",
             Expr::GreaterThan(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
         );
@@ -1117,12 +1122,12 @@ mod tests {
             "1 2 >= 2 3",
             Expr::GreaterThanOrEqual(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
         );
@@ -1134,12 +1139,12 @@ mod tests {
             "1 2 < 2 / 3 < 4",
             Expr::LessThan(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
             " < 4",
@@ -1148,12 +1153,12 @@ mod tests {
             "1 2 == 2 / 3 > 4 + 3",
             Expr::Equal(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
             " > 4 + 3",
@@ -1162,12 +1167,12 @@ mod tests {
             "1 2 < 2 / 3 < 4 > 3",
             Expr::LessThan(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
             " < 4 > 3",
@@ -1176,12 +1181,12 @@ mod tests {
             "1 2 == 2 / 3 > 4 + 3 != 3",
             Expr::Equal(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
             " > 4 + 3 != 3",
@@ -1192,18 +1197,18 @@ mod tests {
     fn r#match() {
         assert_expr(
             "1 ~ 2",
-            Expr::Match(Box::new(Expr::Number(1f64)), Box::new(Expr::Number(2f64))),
+            Expr::Match(Box::new(Expr::Number(1.0)), Box::new(Expr::Number(2.0))),
         );
         assert_expr(
             "1 3 ~ 2 4",
             Expr::Match(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -1211,12 +1216,12 @@ mod tests {
             "1 < 3 ~ 2 != 4",
             Expr::Match(
                 Box::new(Expr::LessThan(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
                 Box::new(Expr::NotEqual(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -1224,10 +1229,10 @@ mod tests {
             "1 ~ 2 ~ 3",
             Expr::Match(
                 Box::new(Expr::Match(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
-                Box::new(Expr::Number(3f64)),
+                Box::new(Expr::Number(3.0)),
             ),
         );
     }
@@ -1236,18 +1241,18 @@ mod tests {
     fn non_match() {
         assert_expr(
             "1 !~ 2",
-            Expr::NonMatch(Box::new(Expr::Number(1f64)), Box::new(Expr::Number(2f64))),
+            Expr::NonMatch(Box::new(Expr::Number(1.0)), Box::new(Expr::Number(2.0))),
         );
         assert_expr(
             "1 3 !~ 2 4",
             Expr::NonMatch(
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
                 Box::new(Expr::Concat(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -1255,12 +1260,12 @@ mod tests {
             "1 < 3 !~ 2 != 4",
             Expr::NonMatch(
                 Box::new(Expr::LessThan(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
                 Box::new(Expr::NotEqual(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -1268,10 +1273,10 @@ mod tests {
             "1 ~ 2 !~ 3",
             Expr::NonMatch(
                 Box::new(Expr::Match(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
-                Box::new(Expr::Number(3f64)),
+                Box::new(Expr::Number(3.0)),
             ),
         );
     }
@@ -1280,14 +1285,14 @@ mod tests {
     fn in_array() {
         assert_expr(
             "1 in array",
-            Expr::Array(ExprList(vec![Expr::Number(1f64)]), String::from("array")),
+            Expr::Array(ExprList(vec![Expr::Number(1.0)]), String::from("array")),
         );
         assert_expr(
             "1 2 in array",
             Expr::Array(
                 ExprList(vec![Expr::Concat(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )]),
                 String::from("array"),
             ),
@@ -1296,8 +1301,8 @@ mod tests {
             "1 + 2 in array",
             Expr::Array(
                 ExprList(vec![Expr::Add(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )]),
                 String::from("array"),
             ),
@@ -1308,32 +1313,32 @@ mod tests {
     fn logical_operators() {
         assert_expr(
             "1 && 2",
-            Expr::LogicalAnd(Box::new(Expr::Number(1f64)), Box::new(Expr::Number(2f64))),
+            Expr::LogicalAnd(Box::new(Expr::Number(1.0)), Box::new(Expr::Number(2.0))),
         );
         assert_expr(
             "1 || 2",
-            Expr::LogicalOr(Box::new(Expr::Number(1f64)), Box::new(Expr::Number(2f64))),
+            Expr::LogicalOr(Box::new(Expr::Number(1.0)), Box::new(Expr::Number(2.0))),
         );
         assert_expr(
             "1 || 2 || 3",
             Expr::LogicalOr(
                 Box::new(Expr::LogicalOr(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
-                Box::new(Expr::Number(3f64)),
+                Box::new(Expr::Number(3.0)),
             ),
         );
         assert_expr(
             "1 + 2 && 2 * 3",
             Expr::LogicalAnd(
                 Box::new(Expr::Add(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Mul(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )),
             ),
         );
@@ -1342,17 +1347,17 @@ mod tests {
             Expr::LogicalAnd(
                 Box::new(Expr::LogicalAnd(
                     Box::new(Expr::Add(
-                        Box::new(Expr::Number(1f64)),
-                        Box::new(Expr::Number(2f64)),
+                        Box::new(Expr::Number(1.0)),
+                        Box::new(Expr::Number(2.0)),
                     )),
                     Box::new(Expr::Mul(
-                        Box::new(Expr::Number(2f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(2.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                 )),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
             ),
         );
@@ -1361,17 +1366,17 @@ mod tests {
             Expr::LogicalOr(
                 Box::new(Expr::LogicalAnd(
                     Box::new(Expr::Add(
-                        Box::new(Expr::Number(1f64)),
-                        Box::new(Expr::Number(2f64)),
+                        Box::new(Expr::Number(1.0)),
+                        Box::new(Expr::Number(2.0)),
                     )),
                     Box::new(Expr::Mul(
-                        Box::new(Expr::Number(2f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(2.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                 )),
                 Box::new(Expr::Div(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
             ),
         );
@@ -1379,17 +1384,17 @@ mod tests {
             "1 + 2 || 2 * 3 && 3 / 2",
             Expr::LogicalOr(
                 Box::new(Expr::Add(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::LogicalAnd(
                     Box::new(Expr::Mul(
-                        Box::new(Expr::Number(2f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(2.0)),
+                        Box::new(Expr::Number(3.0)),
                     )),
                     Box::new(Expr::Div(
-                        Box::new(Expr::Number(3f64)),
-                        Box::new(Expr::Number(2f64)),
+                        Box::new(Expr::Number(3.0)),
+                        Box::new(Expr::Number(2.0)),
                     )),
                 )),
             ),
@@ -1399,15 +1404,15 @@ mod tests {
             Expr::LogicalOr(
                 Box::new(Expr::Array(
                     ExprList(vec![Expr::Concat(
-                        Box::new(Expr::Number(1f64)),
-                        Box::new(Expr::Number(2f64)),
+                        Box::new(Expr::Number(1.0)),
+                        Box::new(Expr::Number(2.0)),
                     )]),
                     String::from("array1"),
                 )),
                 Box::new(Expr::Array(
                     ExprList(vec![Expr::Concat(
-                        Box::new(Expr::Number(3f64)),
-                        Box::new(Expr::Number(4f64)),
+                        Box::new(Expr::Number(3.0)),
+                        Box::new(Expr::Number(4.0)),
                     )]),
                     String::from("array2"),
                 )),
@@ -1418,23 +1423,23 @@ mod tests {
             Expr::LogicalOr(
                 Box::new(Expr::Array(
                     ExprList(vec![Expr::Concat(
-                        Box::new(Expr::Number(1f64)),
-                        Box::new(Expr::Number(2f64)),
+                        Box::new(Expr::Number(1.0)),
+                        Box::new(Expr::Number(2.0)),
                     )]),
                     String::from("array1"),
                 )),
                 Box::new(Expr::LogicalAnd(
                     Box::new(Expr::Array(
                         ExprList(vec![Expr::Concat(
-                            Box::new(Expr::Number(3f64)),
-                            Box::new(Expr::Number(4f64)),
+                            Box::new(Expr::Number(3.0)),
+                            Box::new(Expr::Number(4.0)),
                         )]),
                         String::from("array2"),
                     )),
                     Box::new(Expr::Array(
                         ExprList(vec![Expr::Concat(
-                            Box::new(Expr::Number(5f64)),
-                            Box::new(Expr::Number(6f64)),
+                            Box::new(Expr::Number(5.0)),
+                            Box::new(Expr::Number(6.0)),
                         )]),
                         String::from("array3"),
                     )),
@@ -1444,7 +1449,7 @@ mod tests {
         assert_expr(
             "1 ? ! a : ! _b",
             Expr::Conditional(
-                Box::new(Expr::Number(1f64)),
+                Box::new(Expr::Number(1.0)),
                 Box::new(Expr::LogicalNot(Box::new(Expr::LValue(LValueType::Name(
                     "a".to_string(),
                 ))))),
@@ -1457,9 +1462,9 @@ mod tests {
             "! $0 ^ 2",
             Expr::LogicalNot(Box::new(Expr::Pow(
                 Box::new(Expr::LValue(LValueType::Dollar(Box::new(Expr::Number(
-                    0f64,
+                    0.0,
                 ))))),
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
             ))),
         );
     }
@@ -1469,25 +1474,25 @@ mod tests {
         assert_expr(
             "1 ? 2 : 3",
             Expr::Conditional(
-                Box::new(Expr::Number(1f64)),
-                Box::new(Expr::Number(2f64)),
-                Box::new(Expr::Number(3f64)),
+                Box::new(Expr::Number(1.0)),
+                Box::new(Expr::Number(2.0)),
+                Box::new(Expr::Number(3.0)),
             ),
         );
         assert_expr(
             "1 || 2 ? 3 + 2 : 2 < 4",
             Expr::Conditional(
                 Box::new(Expr::LogicalOr(
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Add(
-                    Box::new(Expr::Number(3f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(3.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::LessThan(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(4f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(4.0)),
                 )),
             ),
         );
@@ -1496,13 +1501,13 @@ mod tests {
             Expr::Conditional(
                 Box::new(Expr::Equal(
                     Box::new(Expr::LValue(LValueType::Name("num".to_string()))),
-                    Box::new(Expr::Number(1f64)),
+                    Box::new(Expr::Number(1.0)),
                 )),
                 Box::new(Expr::String("number 1".to_string())),
                 Box::new(Expr::Conditional(
                     Box::new(Expr::Equal(
                         Box::new(Expr::LValue(LValueType::Name("num".to_string()))),
-                        Box::new(Expr::Number(2f64)),
+                        Box::new(Expr::Number(2.0)),
                     )),
                     Box::new(Expr::String("number 2".to_string())),
                     Box::new(Expr::String("something else".to_string())),
@@ -1512,15 +1517,15 @@ mod tests {
         assert_expr(
             "1 ? 2 : 3 0 ? 1 : 2",
             Expr::Conditional(
-                Box::new(Expr::Number(1f64)),
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(1.0)),
+                Box::new(Expr::Number(2.0)),
                 Box::new(Expr::Conditional(
                     Box::new(Expr::Concat(
-                        Box::new(Expr::Number(3f64)),
-                        Box::new(Expr::Number(0f64)),
+                        Box::new(Expr::Number(3.0)),
+                        Box::new(Expr::Number(0.0)),
                     )),
-                    Box::new(Expr::Number(1f64)),
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::Number(2.0)),
                 )),
             ),
         );
@@ -1531,7 +1536,7 @@ mod tests {
         assert_expr(
             r#"1 ? "ok" : "ko""#,
             Expr::Conditional(
-                Box::new(Expr::Number(1f64)),
+                Box::new(Expr::Number(1.0)),
                 Box::new(Expr::String("ok".to_string())),
                 Box::new(Expr::String("ko".to_string())),
             ),
@@ -1558,9 +1563,9 @@ mod tests {
             Expr::LValue(LValueType::Brackets(
                 "_c".to_owned(),
                 ExprList(vec![
-                    Expr::Number(1f64),
-                    Expr::Number(2f64),
-                    Expr::Number(3f64),
+                    Expr::Number(1.0),
+                    Expr::Number(2.0),
+                    Expr::Number(3.0),
                 ]),
             )),
         );
@@ -1570,10 +1575,10 @@ mod tests {
                 Box::new(Expr::Mul(
                     Box::new(Expr::LValue(LValueType::Brackets(
                         "a".to_owned(),
-                        ExprList(vec![Expr::Number(2f64)]),
+                        ExprList(vec![Expr::Number(2.0)]),
                     ))),
                     Box::new(Expr::LValue(LValueType::Dollar(Box::new(Expr::Number(
-                        0f64,
+                        0.0,
                     ))))),
                 )),
                 Box::new(Expr::LValue(LValueType::Name("b".to_owned()))),
@@ -1586,7 +1591,7 @@ mod tests {
         assert_expr(
             "1 ? /ok/ : /ko/",
             Expr::Conditional(
-                Box::new(Expr::Number(1f64)),
+                Box::new(Expr::Number(1.0)),
                 Box::new(Expr::Regexp("ok".to_string())),
                 Box::new(Expr::Regexp("ko".to_string())),
             ),
@@ -1598,7 +1603,7 @@ mod tests {
         assert_expr(
             "1 ? ++_a : --_b",
             Expr::Conditional(
-                Box::new(Expr::Number(1f64)),
+                Box::new(Expr::Number(1.0)),
                 Box::new(Expr::PreIncrement(LValueType::Name("_a".to_string()))),
                 Box::new(Expr::PreDecrement(LValueType::Name("_b".to_string()))),
             ),
@@ -1617,7 +1622,7 @@ mod tests {
         assert_expr(
             "1 ? _a++ : _b--",
             Expr::Conditional(
-                Box::new(Expr::Number(1f64)),
+                Box::new(Expr::Number(1.0)),
                 Box::new(Expr::PostIncrement(LValueType::Name("_a".to_string()))),
                 Box::new(Expr::PostDecrement(LValueType::Name("_b".to_string()))),
             ),
@@ -1636,17 +1641,17 @@ mod tests {
         assert_expr(
             " ( 2 + 3 )",
             Expr::Grouping(Box::new(Expr::Add(
-                Box::new(Expr::Number(2f64)),
-                Box::new(Expr::Number(3f64)),
+                Box::new(Expr::Number(2.0)),
+                Box::new(Expr::Number(3.0)),
             ))),
         );
         assert_expr(
             "2 * (2 + 3)",
             Expr::Mul(
-                Box::new(Expr::Number(2f64)),
+                Box::new(Expr::Number(2.0)),
                 Box::new(Expr::Grouping(Box::new(Expr::Add(
-                    Box::new(Expr::Number(2f64)),
-                    Box::new(Expr::Number(3f64)),
+                    Box::new(Expr::Number(2.0)),
+                    Box::new(Expr::Number(3.0)),
                 )))),
             ),
         );
@@ -1654,20 +1659,20 @@ mod tests {
             "(-2) ^ 3",
             Expr::Pow(
                 Box::new(Expr::Grouping(Box::new(Expr::UnaryMinus(Box::new(
-                    Expr::Number(2f64),
+                    Expr::Number(2.0),
                 ))))),
-                Box::new(Expr::Number(3f64)),
+                Box::new(Expr::Number(3.0)),
             ),
         );
         assert_expr(
             "5 / (2 * (2 + 3))",
             Expr::Div(
-                Box::new(Expr::Number(5f64)),
+                Box::new(Expr::Number(5.0)),
                 Box::new(Expr::Grouping(Box::new(Expr::Mul(
-                    Box::new(Expr::Number(2f64)),
+                    Box::new(Expr::Number(2.0)),
                     Box::new(Expr::Grouping(Box::new(Expr::Add(
-                        Box::new(Expr::Number(2f64)),
-                        Box::new(Expr::Number(3f64)),
+                        Box::new(Expr::Number(2.0)),
+                        Box::new(Expr::Number(3.0)),
                     )))),
                 )))),
             ),
@@ -1684,7 +1689,7 @@ mod tests {
             "my_func2(2, 3)",
             Expr::FunctionCall(
                 "my_func2".to_string(),
-                ExprList(vec![Expr::Number(2f64), Expr::Number(3f64)]),
+                ExprList(vec![Expr::Number(2.0), Expr::Number(3.0)]),
             ),
         );
         assert_expr(
@@ -1692,7 +1697,7 @@ mod tests {
             Expr::FunctionCall(
                 "my_func3".to_string(),
                 ExprList(vec![
-                    Expr::Add(Box::new(Expr::Number(2f64)), Box::new(Expr::Number(3f64))),
+                    Expr::Add(Box::new(Expr::Number(2.0)), Box::new(Expr::Number(3.0))),
                     Expr::LValue(LValueType::Name("a".to_string())),
                 ]),
             ),
@@ -1716,7 +1721,7 @@ mod tests {
             Expr::Assign(
                 AssignType::Normal,
                 LValueType::Name("a".to_string()),
-                Box::new(Expr::Number(42f64)),
+                Box::new(Expr::Number(42.0)),
             ),
         );
         assert_expr(
@@ -1724,7 +1729,7 @@ mod tests {
             Expr::Assign(
                 AssignType::Pow,
                 LValueType::Name("a".to_string()),
-                Box::new(Expr::Number(42f64)),
+                Box::new(Expr::Number(42.0)),
             ),
         );
         assert_expr(
@@ -1732,7 +1737,7 @@ mod tests {
             Expr::Assign(
                 AssignType::Mod,
                 LValueType::Name("a".to_string()),
-                Box::new(Expr::Number(42f64)),
+                Box::new(Expr::Number(42.0)),
             ),
         );
         assert_expr(
@@ -1740,7 +1745,7 @@ mod tests {
             Expr::Assign(
                 AssignType::Mul,
                 LValueType::Name("a".to_string()),
-                Box::new(Expr::Number(42f64)),
+                Box::new(Expr::Number(42.0)),
             ),
         );
         assert_expr(
@@ -1748,7 +1753,7 @@ mod tests {
             Expr::Assign(
                 AssignType::Div,
                 LValueType::Name("a".to_string()),
-                Box::new(Expr::Number(42f64)),
+                Box::new(Expr::Number(42.0)),
             ),
         );
         assert_expr(
@@ -1756,7 +1761,7 @@ mod tests {
             Expr::Assign(
                 AssignType::Add,
                 LValueType::Name("a".to_string()),
-                Box::new(Expr::Number(42f64)),
+                Box::new(Expr::Number(42.0)),
             ),
         );
         assert_expr(
@@ -1764,7 +1769,7 @@ mod tests {
             Expr::Assign(
                 AssignType::Sub,
                 LValueType::Name("a".to_string()),
-                Box::new(Expr::Number(42f64)),
+                Box::new(Expr::Number(42.0)),
             ),
         );
         assert_expr(
@@ -1775,7 +1780,7 @@ mod tests {
                 Box::new(Expr::Assign(
                     AssignType::Normal,
                     LValueType::Name("b".to_string()),
-                    Box::new(Expr::Number(42f64)),
+                    Box::new(Expr::Number(42.0)),
                 )),
             ),
         );

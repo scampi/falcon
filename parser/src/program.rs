@@ -67,14 +67,17 @@ impl fmt::Display for Pattern {
 
 named!(eat_terminator<CompleteStr, CompleteStr>, eat_separator!(" \r\n\t;"));
 
-named!(pub parse_program<CompleteStr, Program>,
+pub fn parse_program(input: &str) -> Program {
+    let complete_input = CompleteStr::from(input);
     exact!(
-        map!(
-            many0!(wrap_sep!(eat_terminator, parse_item)),
-            |items| Program::new(items)
-        )
+        &complete_input,
+        map!(many0!(wrap_sep!(eat_terminator, parse_item)), |items| {
+            Program::new(items)
+        })
     )
-);
+    .unwrap()
+    .1
+}
 
 named!(parse_item<CompleteStr, Item>,
     alt!(
@@ -116,14 +119,11 @@ mod tests {
     use super::*;
 
     fn assert_program(input: &str, expected: Program) {
-        let prog = parse_program(CompleteStr::from(input));
-        assert!(prog.is_ok(), "input: {}\n{:?}", input, prog);
-        let prog = prog.unwrap();
-        assert!(prog.0.is_empty(), "input: {}\n{:?}", input, prog);
+        let prog = parse_program(input);
         assert_eq!(
-            prog.1, expected,
+            prog, expected,
             "\nexpected:\n{}\n\nactual:\n{}",
-            expected, prog.1
+            expected, prog
         );
     }
 
