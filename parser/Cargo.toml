@@ -1,9 +1,0 @@
-[package]
-name = "parser"
-version = "0.1.0"
-authors = ["Stéphane Campinas <stephane.campinas@gmail.com>"]
-license = "MIT"
-edition = "2018"
-
-[dependencies]
-nom = { version = "4.1.1" }

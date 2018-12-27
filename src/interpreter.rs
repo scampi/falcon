@@ -1,7 +1,7 @@
-use parser::expr::LValueType;
+use crate::errors::EvaluationError;
+use crate::parser::expr::LValueType;
 use std::collections::HashMap;
 
-mod errors;
 mod expr;
 
 #[derive(Default)]
@@ -67,5 +67,5 @@ impl<'a> Value<'a> {
 //}
 
 trait Eval {
-    fn eval(&self, cxt: &Context) -> Result<Value, errors::EvaluationError>;
+    fn eval(&self, cxt: &Context) -> Result<Value, EvaluationError>;
 }

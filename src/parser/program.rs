@@ -1,9 +1,9 @@
 use nom::{types::CompleteStr, *};
 use std::fmt;
 
-use crate::expr::*;
-use crate::stmt::*;
-use crate::util::parse_name;
+use crate::parser::expr::*;
+use crate::parser::stmt::*;
+use crate::parser::util::parse_name;
 
 #[derive(Debug, PartialEq)]
 pub struct Program {
@@ -79,8 +79,11 @@ pub fn parse_program(input: &str) -> Program {
     .1
 }
 
-named!(parse_item<CompleteStr, Item>,
+#[rustfmt::skip]
+#[allow(dead_code)]
+fn parse_item(input: CompleteStr) -> IResult<CompleteStr, Item> {
     alt!(
+        input,
         do_parse!(
             pattern: parse_pattern >>
             action: parse_stmt_list >>
@@ -89,10 +92,12 @@ named!(parse_item<CompleteStr, Item>,
         | parse_stmt_list => { |stmts| Item::Action(stmts) }
         | parse_function_def
     )
-);
+}
 
-named!(parse_pattern<CompleteStr, Pattern>,
+#[allow(dead_code)]
+fn parse_pattern(input: CompleteStr) -> IResult<CompleteStr, Pattern> {
     alt!(
+        input,
         ws!(tag!("BEGIN")) => { |_| Pattern::Begin }
         | ws!(tag!("END")) => { |_| Pattern::End }
         | separated_pair!(parse_expr, ws!(char!(',')), parse_expr) => {
@@ -100,10 +105,13 @@ named!(parse_pattern<CompleteStr, Pattern>,
         }
         | parse_expr => { |expr| Pattern::Exprs(ExprList(vec![expr])) }
     )
-);
+}
 
-named!(parse_function_def<CompleteStr, Item>,
+#[rustfmt::skip]
+#[allow(dead_code)]
+fn parse_function_def(input: CompleteStr) -> IResult<CompleteStr, Item> {
     do_parse!(
+        input,
         ws!(tag!("function")) >>
         fname: parse_name >>
         char!('(') >>
@@ -112,7 +120,7 @@ named!(parse_function_def<CompleteStr, Item>,
         body: parse_stmt_list >>
         (Item::FunctionDef(fname, args, body))
     )
-);
+}
 
 #[cfg(test)]
 mod tests {

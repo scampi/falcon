@@ -1,6 +1,6 @@
 use nom::{types::CompleteStr, *};
 
-crate fn parse_name(input: CompleteStr) -> IResult<CompleteStr, String> {
+pub fn parse_name(input: CompleteStr) -> IResult<CompleteStr, String> {
     map!(
         input,
         verify!(
@@ -12,7 +12,7 @@ crate fn parse_name(input: CompleteStr) -> IResult<CompleteStr, String> {
 }
 
 // In opposite to the grammar, the func_name is either an user function or a builtin one
-crate fn parse_func_name(input: CompleteStr) -> IResult<CompleteStr, String> {
+pub fn parse_func_name(input: CompleteStr) -> IResult<CompleteStr, String> {
     map!(
         input,
         verify!(
@@ -49,7 +49,7 @@ fn is_keyword(name: &str) -> bool {
     }
 }
 
-crate fn parse_string(input: CompleteStr) -> IResult<CompleteStr, String> {
+pub fn parse_string(input: CompleteStr) -> IResult<CompleteStr, String> {
     map!(
         input,
         delimited!(
@@ -59,17 +59,17 @@ crate fn parse_string(input: CompleteStr) -> IResult<CompleteStr, String> {
                 '\\',
                 alt!(
                     tag!("\\")
-                    | tag!("\"")
-                    | tag!("a")
-                    | tag!("b")
-                    | tag!("f")
-                    | tag!("n")
-                    | tag!("r")
-                    | tag!("t")
-                    | tag!("v")
-                    | tag!("/")
-                    | take_while_m_n!(1, 3, is_oct_digit)
-                    | recognize!(preceded!(char!('c'), anychar))
+                        | tag!("\"")
+                        | tag!("a")
+                        | tag!("b")
+                        | tag!("f")
+                        | tag!("n")
+                        | tag!("r")
+                        | tag!("t")
+                        | tag!("v")
+                        | tag!("/")
+                        | take_while_m_n!(1, 3, is_oct_digit)
+                        | recognize!(preceded!(char!('c'), anychar))
                 )
             ),
             char!('"')
@@ -78,7 +78,7 @@ crate fn parse_string(input: CompleteStr) -> IResult<CompleteStr, String> {
     )
 }
 
-crate fn parse_regexp(input: CompleteStr) -> IResult<CompleteStr, String> {
+pub fn parse_regexp(input: CompleteStr) -> IResult<CompleteStr, String> {
     map!(
         input,
         delimited!(
@@ -88,17 +88,17 @@ crate fn parse_regexp(input: CompleteStr) -> IResult<CompleteStr, String> {
                 '\\',
                 alt!(
                     tag!("\\")
-                    | tag!("\"")
-                    | tag!("a")
-                    | tag!("b")
-                    | tag!("f")
-                    | tag!("n")
-                    | tag!("r")
-                    | tag!("t")
-                    | tag!("v")
-                    | tag!("/")
-                    | take_while_m_n!(1, 3, is_oct_digit)
-                    | recognize!(preceded!(char!('c'), anychar))
+                        | tag!("\"")
+                        | tag!("a")
+                        | tag!("b")
+                        | tag!("f")
+                        | tag!("n")
+                        | tag!("r")
+                        | tag!("t")
+                        | tag!("v")
+                        | tag!("/")
+                        | take_while_m_n!(1, 3, is_oct_digit)
+                        | recognize!(preceded!(char!('c'), anychar))
                 )
             ),
             char!('/')
@@ -184,8 +184,8 @@ mod tests {
 
     #[test]
     fn regexp() {
-        is_valid_string("gargoyles");
-        is_valid_string("john connor");
-        is_valid_string(r#"aaa\/bbb"#);
+        is_valid_regexp("gargoyles");
+        is_valid_regexp("john connor");
+        is_valid_regexp(r#"aaa\/bbb"#);
     }
 }

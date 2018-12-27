@@ -1,7 +1,7 @@
 use nom::{types::CompleteStr, *};
 use std::fmt;
 
-use crate::util::{parse_func_name, parse_name, parse_regexp, parse_string};
+use crate::parser::util::{parse_func_name, parse_name, parse_regexp, parse_string};
 
 // TODO:
 // - getline
@@ -154,16 +154,17 @@ impl fmt::Display for Expr {
     }
 }
 
+#[cfg(test)]
 pub fn parse_expr_str(input: &str) -> Expr {
     let complete_input = CompleteStr::from(input);
     do_parse_expr(complete_input, false).unwrap().1
 }
 
-crate fn parse_expr(input: CompleteStr) -> IResult<CompleteStr, Expr> {
+pub fn parse_expr(input: CompleteStr) -> IResult<CompleteStr, Expr> {
     do_parse_expr(input, false)
 }
 
-crate fn parse_print_expr(input: CompleteStr) -> IResult<CompleteStr, Expr> {
+pub fn parse_print_expr(input: CompleteStr) -> IResult<CompleteStr, Expr> {
     do_parse_expr(input, true)
 }
 
@@ -458,7 +459,7 @@ fn parse_conditional_expr(input: CompleteStr, print_expr: bool, left_expr: Expr)
     }
 }
 
-crate fn parse_expr_list(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
+pub fn parse_expr_list(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
     map!(
         input,
         separated_list!(ws!(char!(',')), parse_expr),
@@ -466,7 +467,7 @@ crate fn parse_expr_list(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
     )
 }
 
-crate fn parse_expr_list1(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
+pub fn parse_expr_list1(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
     map!(
         input,
         separated_nonempty_list!(ws!(char!(',')), parse_expr),
@@ -474,15 +475,7 @@ crate fn parse_expr_list1(input: CompleteStr) -> IResult<CompleteStr, ExprList> 
     )
 }
 
-crate fn parse_print_expr_list(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
-    map!(
-        input,
-        separated_list!(ws!(char!(',')), parse_print_expr),
-        |exprs| ExprList(exprs)
-    )
-}
-
-crate fn parse_print_expr_list1(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
+pub fn parse_print_expr_list1(input: CompleteStr) -> IResult<CompleteStr, ExprList> {
     map!(
         input,
         separated_nonempty_list!(ws!(char!(',')), parse_print_expr),
@@ -490,8 +483,10 @@ crate fn parse_print_expr_list1(input: CompleteStr) -> IResult<CompleteStr, Expr
     )
 }
 
-named!(leaf<CompleteStr, Expr>,
+#[rustfmt::skip]
+fn leaf(input: CompleteStr) -> IResult<CompleteStr, Expr> {
     alt!(
+        input,
         delimited!(
             ws!(char!('(')),
             parse_expr,
@@ -525,19 +520,23 @@ named!(leaf<CompleteStr, Expr>,
         | terminated!(parse_lvalue, tag!("--")) => { |lvalue| Expr::PostDecrement(lvalue) }
         | parse_lvalue => { |lvalue| Expr::LValue(lvalue) }
     )
-);
+}
 
-named!(parse_assignment<CompleteStr, Expr>,
+#[rustfmt::skip]
+fn parse_assignment(input: CompleteStr) -> IResult<CompleteStr, Expr> {
     do_parse!(
+        input,
         lvalue: parse_lvalue >>
         op: ws!(alt!(tag!("^=") | tag!("%=") | tag!("*=") | tag!("/=") | tag!("+=") | tag!("-=") | tag!("="))) >>
         rvalue: parse_expr >>
         (Expr::Assign(AssignType::new(&op), lvalue, Box::new(rvalue)))
     )
-);
+}
 
-named!(parse_lvalue<CompleteStr, LValueType>,
+#[rustfmt::skip]
+fn parse_lvalue(input: CompleteStr) -> IResult<CompleteStr, LValueType> {
     alt!(
+        input,
         do_parse!(
             name: parse_name >>
             exprs: delimited!(
@@ -552,7 +551,7 @@ named!(parse_lvalue<CompleteStr, LValueType>,
         }
         | parse_name => { |name: String| LValueType::Name(name) }
     )
-);
+}
 
 #[cfg(test)]
 mod tests {

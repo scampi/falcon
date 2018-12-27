@@ -1,6 +1,6 @@
 use crate::errors::EvaluationError;
-use crate::{Context, Eval, Value};
-use parser::expr::Expr;
+use crate::interpreter::{Context, Eval, Value};
+use crate::parser::expr::Expr;
 
 impl Eval for Expr {
     fn eval(&self, cxt: &Context) -> Result<Value, EvaluationError> {
@@ -40,7 +40,7 @@ impl Eval for Expr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parser::expr::parse_expr_str;
+    use crate::parser::expr::parse_expr_str;
 
     #[test]
     fn arithmetic() {

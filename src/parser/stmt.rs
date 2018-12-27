@@ -1,8 +1,8 @@
 use nom::{types::CompleteStr, *};
 use std::fmt;
 
-use crate::expr::*;
-use crate::util::parse_name;
+use crate::parser::expr::*;
+use crate::parser::util::parse_name;
 
 #[derive(Debug, PartialEq)]
 pub struct StmtList(pub Vec<Stmt>);
@@ -113,7 +113,7 @@ impl fmt::Display for Stmt {
     }
 }
 
-crate fn parse_stmt(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
+pub fn parse_stmt(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     alt!(
         input,
         parse_terminatable
@@ -127,7 +127,7 @@ crate fn parse_stmt(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
 }
 
 #[rustfmt::skip]
-crate fn parse_stmt_list(input: CompleteStr) -> IResult<CompleteStr, StmtList> {
+pub fn parse_stmt_list(input: CompleteStr) -> IResult<CompleteStr, StmtList> {
     do_parse!(
         input,
         ws!(char!('{')) >>
@@ -139,8 +139,10 @@ crate fn parse_stmt_list(input: CompleteStr) -> IResult<CompleteStr, StmtList> {
     )
 }
 
-named!(parse_if_else<CompleteStr, Stmt>,
+#[rustfmt::skip]
+fn parse_if_else(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     do_parse!(
+        input,
         ws!(tag!("if")) >>
         cond: delimited!(ws!(char!('(')), parse_expr, ws!(char!(')'))) >>
         ok: parse_stmt >>
@@ -151,29 +153,35 @@ named!(parse_if_else<CompleteStr, Stmt>,
         )) >>
         (Stmt::IfElse(cond, Box::new(ok), ko))
     )
-);
+}
 
-named!(parse_while<CompleteStr, Stmt>,
+#[rustfmt::skip]
+fn parse_while(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     do_parse!(
+        input,
         ws!(tag!("while")) >>
         cond: delimited!(ws!(char!('(')), parse_expr, ws!(char!(')'))) >>
         body: parse_stmt >>
         (Stmt::While(cond, Box::new(body)))
     )
-);
+}
 
-named!(parse_do_while<CompleteStr, Stmt>,
+#[rustfmt::skip]
+fn parse_do_while(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     do_parse!(
+        input,
         ws!(tag!("do")) >>
         body: parse_stmt >>
         ws!(tag!("while")) >>
         cond: delimited!(ws!(char!('(')), parse_expr, ws!(char!(')'))) >>
         (Stmt::DoWhile(cond, Box::new(body)))
     )
-);
+}
 
-named!(parse_for<CompleteStr, Stmt>,
+#[rustfmt::skip]
+fn parse_for(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     do_parse!(
+        input,
         ws!(tag!("for")) >>
         ws!(char!('(')) >>
         start: opt!(parse_simple_stmt) >>
@@ -190,10 +198,12 @@ named!(parse_for<CompleteStr, Stmt>,
             Box::new(body)
         ))
     )
-);
+}
 
-named!(parse_for_in<CompleteStr, Stmt>,
+#[rustfmt::skip]
+fn parse_for_in(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     do_parse!(
+        input,
         ws!(tag!("for")) >>
         ws!(char!('(')) >>
         a: parse_name >>
@@ -203,10 +213,12 @@ named!(parse_for_in<CompleteStr, Stmt>,
         body: parse_stmt >>
         (Stmt::ForIn(a, b, Box::new(body)))
     )
-);
+}
 
-named!(parse_terminatable<CompleteStr, Stmt>,
+#[rustfmt::skip]
+fn parse_terminatable(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     alt!(
+        input,
         parse_simple_stmt
         | ws!(tag!("break")) => { |_| Stmt::Break }
         | ws!(tag!("continue")) => { |_| Stmt::Continue }
@@ -222,18 +234,21 @@ named!(parse_terminatable<CompleteStr, Stmt>,
             (Stmt::Return(code))
         )
     )
-);
+}
 
-named!(parse_simple_stmt<CompleteStr, Stmt>,
+fn parse_simple_stmt(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     alt!(
+        input,
         parse_delete
         | parse_expr => { |e| Stmt::Expr(e) }
         | parse_print_stmt
     )
-);
+}
 
-named!(parse_delete<CompleteStr, Stmt>,
+#[rustfmt::skip]
+fn parse_delete(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     do_parse!(
+        input,
         ws!(tag!("delete")) >>
         name: parse_name >>
         exprs: delimited!(
@@ -243,10 +258,12 @@ named!(parse_delete<CompleteStr, Stmt>,
         ) >>
         (Stmt::Delete(name, exprs))
     )
-);
+}
 
-named!(parse_print_stmt<CompleteStr, Stmt>,
+#[rustfmt::skip]
+fn parse_print_stmt(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
     alt!(
+        input,
         do_parse!(
             ws!(tag!("printf")) >>
             exprs: delimited!(
@@ -280,10 +297,11 @@ named!(parse_print_stmt<CompleteStr, Stmt>,
             (Stmt::Print(exprs, redir))
         )
     )
-);
+}
 
-named!(parse_output_redirection<CompleteStr, OutputRedirection>,
+fn parse_output_redirection(input: CompleteStr) -> IResult<CompleteStr, OutputRedirection> {
     alt!(
+        input,
         preceded!(ws!(tag!(">>")), parse_print_expr) => {
             |expr| OutputRedirection::Append(expr)
         }
@@ -294,7 +312,7 @@ named!(parse_output_redirection<CompleteStr, OutputRedirection>,
             |expr| OutputRedirection::Pipe(expr)
         }
     )
-);
+}
 
 #[cfg(test)]
 mod tests {

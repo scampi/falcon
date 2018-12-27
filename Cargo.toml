@@ -1,2 +1,11 @@
-[workspace]
-members = [ "interpreter", "parser" ]
+[package]
+name = "falcon"
+version = "0.1.0"
+authors = ["Stéphane Campinas <stephane.campinas@gmail.com>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]
+nom = { version = "4.1.1" }
+failure = "0.1.3"
+failure_derive = "0.1.3"
