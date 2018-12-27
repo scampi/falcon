@@ -343,7 +343,8 @@ mod tests {
         assert_stmt(
             "if (a == 1) break",
             Stmt::IfElse(
-                Expr::Equal(
+                Expr::Comparison(
+                    CmpOperator::Equal,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(1f64)),
                 ),
@@ -354,7 +355,8 @@ mod tests {
         assert_stmt(
             "if (a == 1) continue else break",
             Stmt::IfElse(
-                Expr::Equal(
+                Expr::Comparison(
+                    CmpOperator::Equal,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(1f64)),
                 ),
@@ -365,7 +367,8 @@ mod tests {
         assert_stmt(
             r#"if ( a == 1 ) 42 else "gargoyles""#,
             Stmt::IfElse(
-                Expr::Equal(
+                Expr::Comparison(
+                    CmpOperator::Equal,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(1f64)),
                 ),
@@ -376,13 +379,15 @@ mod tests {
         assert_stmt(
             "if (a == 1) continue else if (a == 2) break",
             Stmt::IfElse(
-                Expr::Equal(
+                Expr::Comparison(
+                    CmpOperator::Equal,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(1f64)),
                 ),
                 Box::new(Stmt::Continue),
                 Some(Box::new(Stmt::IfElse(
-                    Expr::Equal(
+                    Expr::Comparison(
+                        CmpOperator::Equal,
                         Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                         Box::new(Expr::Number(2f64)),
                     ),
@@ -398,7 +403,8 @@ mod tests {
         assert_stmt(
             "while (a < 10) a++",
             Stmt::While(
-                Expr::LessThan(
+                Expr::Comparison(
+                    CmpOperator::LessThan,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(10f64)),
                 ),
@@ -410,12 +416,14 @@ mod tests {
         assert_stmt(
             "while (a < 10) if (a == 5) break else a++",
             Stmt::While(
-                Expr::LessThan(
+                Expr::Comparison(
+                    CmpOperator::LessThan,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(10f64)),
                 ),
                 Box::new(Stmt::IfElse(
-                    Expr::Equal(
+                    Expr::Comparison(
+                        CmpOperator::Equal,
                         Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                         Box::new(Expr::Number(5f64)),
                     ),
@@ -447,7 +455,8 @@ mod tests {
             "for (;a==2;) 42",
             Stmt::For(
                 None,
-                Some(Expr::Equal(
+                Some(Expr::Comparison(
+                    CmpOperator::Equal,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(2f64)),
                 )),
@@ -500,7 +509,8 @@ mod tests {
         assert_stmt(
             "do a++ while (a < 10)",
             Stmt::DoWhile(
-                Expr::LessThan(
+                Expr::Comparison(
+                    CmpOperator::LessThan,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(10f64)),
                 ),
@@ -512,12 +522,14 @@ mod tests {
         assert_stmt(
             "do if (a == 5) break else a++ while (a < 10)",
             Stmt::DoWhile(
-                Expr::LessThan(
+                Expr::Comparison(
+                    CmpOperator::LessThan,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(10f64)),
                 ),
                 Box::new(Stmt::IfElse(
-                    Expr::Equal(
+                    Expr::Comparison(
+                        CmpOperator::Equal,
                         Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                         Box::new(Expr::Number(5f64)),
                     ),
@@ -531,7 +543,8 @@ mod tests {
         assert_stmt(
             "do do a++ while (1) while (a < 10)",
             Stmt::DoWhile(
-                Expr::LessThan(
+                Expr::Comparison(
+                    CmpOperator::LessThan,
                     Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
                     Box::new(Expr::Number(10f64)),
                 ),
@@ -613,7 +626,8 @@ mod tests {
         assert_stmt(
             "print (42 > 2) > aaa",
             Stmt::Print(
-                ExprList(vec![Expr::GreaterThan(
+                ExprList(vec![Expr::Comparison(
+                    CmpOperator::GreaterThan,
                     Box::new(Expr::Number(42f64)),
                     Box::new(Expr::Number(2f64)),
                 )]),

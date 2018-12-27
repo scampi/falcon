@@ -1,5 +1,5 @@
 use nom::{types::CompleteStr, *};
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use crate::parser::util::{parse_func_name, parse_name, parse_regexp, parse_string};
 
@@ -31,12 +31,7 @@ pub enum Expr {
     Add(Box<Expr>, Box<Expr>),
     Minus(Box<Expr>, Box<Expr>),
     Concat(Box<Expr>, Box<Expr>),
-    LessThan(Box<Expr>, Box<Expr>),
-    LessThanOrEqual(Box<Expr>, Box<Expr>),
-    NotEqual(Box<Expr>, Box<Expr>),
-    Equal(Box<Expr>, Box<Expr>),
-    GreaterThan(Box<Expr>, Box<Expr>),
-    GreaterThanOrEqual(Box<Expr>, Box<Expr>),
+    Comparison(CmpOperator, Box<Expr>, Box<Expr>),
     Match(Box<Expr>, Box<Expr>),
     NonMatch(Box<Expr>, Box<Expr>),
     Array(ExprList, String),
@@ -54,6 +49,45 @@ pub enum Expr {
     PostDecrement(LValueType),
     FunctionCall(String, ExprList),
     Assign(AssignType, LValueType, Box<Expr>),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum CmpOperator {
+    LessThan,
+    LessThanOrEqual,
+    NotEqual,
+    Equal,
+    GreaterThan,
+    GreaterThanOrEqual,
+}
+
+impl FromStr for CmpOperator {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "<" => Ok(CmpOperator::LessThan),
+            "<=" => Ok(CmpOperator::LessThanOrEqual),
+            "!=" => Ok(CmpOperator::NotEqual),
+            "==" => Ok(CmpOperator::Equal),
+            ">" => Ok(CmpOperator::GreaterThan),
+            ">=" => Ok(CmpOperator::GreaterThanOrEqual),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl fmt::Display for CmpOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CmpOperator::LessThan => write!(f, "<"),
+            CmpOperator::LessThanOrEqual => write!(f, "<="),
+            CmpOperator::NotEqual => write!(f, "!="),
+            CmpOperator::Equal => write!(f, "=="),
+            CmpOperator::GreaterThan => write!(f, ">"),
+            CmpOperator::GreaterThanOrEqual => write!(f, ">="),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -126,12 +160,7 @@ impl fmt::Display for Expr {
             Expr::Add(l, r) => write!(formatter, "( {} ) + ( {} )", l, r),
             Expr::Minus(l, r) => write!(formatter, "( {} ) - ( {} )", l, r),
             Expr::Concat(l, r) => write!(formatter, "( {} )   ( {} )", l, r),
-            Expr::LessThan(l, r) => write!(formatter, "( {} ) < ( {} )", l, r),
-            Expr::LessThanOrEqual(l, r) => write!(formatter, "( {} ) <= ( {} )", l, r),
-            Expr::NotEqual(l, r) => write!(formatter, "( {} ) != ( {} )", l, r),
-            Expr::Equal(l, r) => write!(formatter, "( {} ) == ( {} )", l, r),
-            Expr::GreaterThan(l, r) => write!(formatter, "( {} ) > ( {} )", l, r),
-            Expr::GreaterThanOrEqual(l, r) => write!(formatter, "( {} ) >= ( {} )", l, r),
+            Expr::Comparison(op, l, r) => write!(formatter, "( {} ) {} ( {} )", l, op, r),
             Expr::Match(l, r) => write!(formatter, "( {} ) ~ ( {} )", l, r),
             Expr::NonMatch(l, r) => write!(formatter, "( {} ) !~ ( {} )", l, r),
             Expr::Array(exprs, name) => write!(formatter, "({}) in {}", exprs, name),
@@ -305,20 +334,7 @@ fn parse_comparison_expr(input: CompleteStr, print_expr: bool, left_expr: Expr) 
                 e4: call!(parse_concat_expr, e3) >>
                 (e4)
             ) >>
-            (match op.to_string().as_str() {
-                "<" => Expr::LessThan(Box::new(left_expr), Box::new(lower_preceding_expr)),
-                "<=" => {
-                    Expr::LessThanOrEqual(Box::new(left_expr), Box::new(lower_preceding_expr))
-                }
-                "!=" => Expr::NotEqual(Box::new(left_expr), Box::new(lower_preceding_expr)),
-                "==" => Expr::Equal(Box::new(left_expr), Box::new(lower_preceding_expr)),
-                ">" => Expr::GreaterThan(Box::new(left_expr), Box::new(lower_preceding_expr)),
-                ">=" => Expr::GreaterThanOrEqual(
-                    Box::new(left_expr),
-                    Box::new(lower_preceding_expr)
-                ),
-                _ => unreachable!(),
-            })
+            (Expr::Comparison((*op).parse().unwrap(), Box::new(left_expr), Box::new(lower_preceding_expr)))
         ),
         _ => Ok((input, left_expr)),
     }
@@ -1010,7 +1026,8 @@ mod tests {
     fn comparison() {
         assert_expr(
             "1 + 2 == 2 / 3",
-            Expr::Equal(
+            Expr::Comparison(
+                CmpOperator::Equal,
                 Box::new(Expr::Add(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1023,7 +1040,8 @@ mod tests {
         );
         assert_expr(
             "1 2 < 2 / 3 4 + 3",
-            Expr::LessThan(
+            Expr::Comparison(
+                CmpOperator::LessThan,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1042,7 +1060,8 @@ mod tests {
         );
         assert_expr(
             "1 2 <= 2 / 3 4 + 3",
-            Expr::LessThanOrEqual(
+            Expr::Comparison(
+                CmpOperator::LessThanOrEqual,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1061,7 +1080,8 @@ mod tests {
         );
         assert_expr(
             "2 / 3 4 + 3 <= 1 2",
-            Expr::LessThanOrEqual(
+            Expr::Comparison(
+                CmpOperator::LessThanOrEqual,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Div(
                         Box::new(Expr::Number(2.0)),
@@ -1080,7 +1100,8 @@ mod tests {
         );
         assert_expr(
             "1 2 != 2 3",
-            Expr::NotEqual(
+            Expr::Comparison(
+                CmpOperator::NotEqual,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1093,7 +1114,8 @@ mod tests {
         );
         assert_expr(
             "1 2 == 2 3",
-            Expr::Equal(
+            Expr::Comparison(
+                CmpOperator::Equal,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1106,7 +1128,8 @@ mod tests {
         );
         assert_expr(
             "1 2 > 2 3",
-            Expr::GreaterThan(
+            Expr::Comparison(
+                CmpOperator::GreaterThan,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1119,7 +1142,8 @@ mod tests {
         );
         assert_expr(
             "1 2 >= 2 3",
-            Expr::GreaterThanOrEqual(
+            Expr::Comparison(
+                CmpOperator::GreaterThanOrEqual,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1136,7 +1160,8 @@ mod tests {
     fn syntax_error() {
         assert_expr_with_leftovers(
             "1 2 < 2 / 3 < 4",
-            Expr::LessThan(
+            Expr::Comparison(
+                CmpOperator::LessThan,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1150,7 +1175,8 @@ mod tests {
         );
         assert_expr_with_leftovers(
             "1 2 == 2 / 3 > 4 + 3",
-            Expr::Equal(
+            Expr::Comparison(
+                CmpOperator::Equal,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1164,7 +1190,8 @@ mod tests {
         );
         assert_expr_with_leftovers(
             "1 2 < 2 / 3 < 4 > 3",
-            Expr::LessThan(
+            Expr::Comparison(
+                CmpOperator::LessThan,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1178,7 +1205,8 @@ mod tests {
         );
         assert_expr_with_leftovers(
             "1 2 == 2 / 3 > 4 + 3 != 3",
-            Expr::Equal(
+            Expr::Comparison(
+                CmpOperator::Equal,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
@@ -1214,11 +1242,13 @@ mod tests {
         assert_expr(
             "1 < 3 ~ 2 != 4",
             Expr::Match(
-                Box::new(Expr::LessThan(
+                Box::new(Expr::Comparison(
+                    CmpOperator::LessThan,
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::NotEqual(
+                Box::new(Expr::Comparison(
+                    CmpOperator::NotEqual,
                     Box::new(Expr::Number(2.0)),
                     Box::new(Expr::Number(4.0)),
                 )),
@@ -1258,11 +1288,13 @@ mod tests {
         assert_expr(
             "1 < 3 !~ 2 != 4",
             Expr::NonMatch(
-                Box::new(Expr::LessThan(
+                Box::new(Expr::Comparison(
+                    CmpOperator::LessThan,
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(3.0)),
                 )),
-                Box::new(Expr::NotEqual(
+                Box::new(Expr::Comparison(
+                    CmpOperator::NotEqual,
                     Box::new(Expr::Number(2.0)),
                     Box::new(Expr::Number(4.0)),
                 )),
@@ -1489,7 +1521,8 @@ mod tests {
                     Box::new(Expr::Number(3.0)),
                     Box::new(Expr::Number(2.0)),
                 )),
-                Box::new(Expr::LessThan(
+                Box::new(Expr::Comparison(
+                    CmpOperator::LessThan,
                     Box::new(Expr::Number(2.0)),
                     Box::new(Expr::Number(4.0)),
                 )),
@@ -1498,13 +1531,15 @@ mod tests {
         assert_expr(
             r#"num == 1 ? "number 1" : num == 2 ? "number 2" : "something else""#,
             Expr::Conditional(
-                Box::new(Expr::Equal(
+                Box::new(Expr::Comparison(
+                    CmpOperator::Equal,
                     Box::new(Expr::LValue(LValueType::Name("num".to_string()))),
                     Box::new(Expr::Number(1.0)),
                 )),
                 Box::new(Expr::String("number 1".to_string())),
                 Box::new(Expr::Conditional(
-                    Box::new(Expr::Equal(
+                    Box::new(Expr::Comparison(
+                        CmpOperator::Equal,
                         Box::new(Expr::LValue(LValueType::Name("num".to_string()))),
                         Box::new(Expr::Number(2.0)),
                     )),
