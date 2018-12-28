@@ -6,7 +6,7 @@ use crate::{
 use std::collections::hash_map::Entry;
 
 impl Eval for Expr {
-    fn eval(&self, cxt: &mut Context) -> Result<Value, EvaluationError> {
+    fn eval<'a>(&'a self, cxt: &mut Context<'a>) -> Result<Value, EvaluationError> {
         match self {
             Expr::Mod(l, r) => Ok(Value::from(
                 l.eval(cxt)?.as_number() % r.eval(cxt)?.as_number(),
@@ -69,7 +69,7 @@ impl Eval for Expr {
                         None => Ok(Value::from(String::new())),
                     }
                 },
-                LValueType::Name(name) => match cxt.vars.entry(name.to_owned()) {
+                LValueType::Name(name) => match cxt.vars.entry(name.as_str()) {
                     Entry::Occupied(entry) => Ok(entry.get().clone()),
                     Entry::Vacant(entry) => Ok(entry.insert(Value::from(String::new())).clone()),
                 },

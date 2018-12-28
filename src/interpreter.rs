@@ -41,7 +41,7 @@ impl AwkVariables {
 }
 struct Context<'a> {
     awk_vars: AwkVariables,
-    vars: HashMap<String, Value>,
+    vars: HashMap<&'a str, Value>,
     line: &'a str,
     fields: Vec<&'a str>,
 }
@@ -152,5 +152,5 @@ impl Value {
 }
 
 trait Eval {
-    fn eval(&self, cxt: &mut Context) -> Result<Value, EvaluationError>;
+    fn eval<'a>(&'a self, cxt: &mut Context<'a>) -> Result<Value, EvaluationError>;
 }
