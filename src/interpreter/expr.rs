@@ -3,7 +3,10 @@ use crate::{
     interpreter::{Context, Eval, Value},
     parser::expr::{Expr, LValueType},
 };
-use std::{borrow::Cow, collections::hash_map::Entry};
+use std::{
+    borrow::Cow,
+    collections::{hash_map::Entry, HashMap},
+};
 
 impl Eval for Expr {
     fn eval<'a>(&'a self, cxt: &mut Context<'a>) -> Result<Value, EvaluationError> {
@@ -83,7 +86,27 @@ impl Eval for Expr {
                         Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
                     },
                 },
-                _ => unimplemented!(),
+                LValueType::Brackets(name, key) => {
+                    let mut key_str = String::new();
+                    for expr in &key.0 {
+                        if !key_str.is_empty() {
+                            key_str.push_str(&cxt.awk_vars.subsep);
+                        }
+                        key_str.push_str(&expr.eval(cxt)?.as_string());
+                    }
+                    match cxt.arrays.entry(name) {
+                        Entry::Occupied(mut entry) => match entry.get_mut().entry(key_str) {
+                            Entry::Occupied(entry) => Ok(entry.get().clone()),
+                            Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
+                        },
+                        Entry::Vacant(entry) => {
+                            let mut value = HashMap::new();
+                            value.insert(key_str, Value::Uninitialised);
+                            entry.insert(value);
+                            Ok(Value::Uninitialised)
+                        },
+                    }
+                },
             },
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
             Expr::UnaryPlus(up) => up.eval(cxt),
@@ -357,10 +380,45 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(2.0));
+        assert!(cxt.vars.is_empty());
 
         let expr = parse_expr_str("nf");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::Uninitialised);
+        assert_eq!(cxt.vars.get("nf"), Some(&Value::Uninitialised));
+    }
+
+    #[test]
+    fn array_lvalue() {
+        let mut cxt = Context::new();
+
+        let expr = parse_expr_str("a[0]");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::Uninitialised);
+        assert_eq!(
+            cxt.arrays.get("a").unwrap().get("0"),
+            Some(&Value::Uninitialised)
+        );
+
+        let expr = parse_expr_str("b[0,1,2]");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::Uninitialised);
+        assert_eq!(
+            cxt.arrays.get("b").unwrap().get("012"),
+            Some(&Value::Uninitialised)
+        );
+
+        cxt.awk_vars.subsep = String::from("#");
+        let expr = parse_expr_str("b[0,1,2]");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::Uninitialised);
+        assert_eq!(
+            cxt.arrays.get("b").unwrap().get("0#1#2"),
+            Some(&Value::Uninitialised)
+        );
     }
 }

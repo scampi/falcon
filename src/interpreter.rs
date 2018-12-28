@@ -20,13 +20,13 @@ struct AwkVariables {
     nf: usize,
     /// The ordinal number of the current record from the start of input
     nr: usize,
-    /*ofmt: String,
-     *ofs: String,
-     *ors: String,
-     *rlength: usize,
-     *rs: String,
-     *rstart: usize,
-     *subsep: String, */
+    //ofmt: String,
+    //ofs: String,
+    //ors: String,
+    //rlength: usize,
+    //rs: String,
+    //rstart: usize,
+    subsep: String,
 }
 
 impl AwkVariables {
@@ -36,6 +36,7 @@ impl AwkVariables {
             fs: String::from(" "),
             nf: 0,
             nr: 0,
+            subsep: String::new(),
         }
     }
 }
@@ -43,6 +44,7 @@ impl AwkVariables {
 struct Context<'a> {
     awk_vars: AwkVariables,
     vars: HashMap<&'a str, Value<'a>>,
+    arrays: HashMap<&'a str, HashMap<String, Value<'a>>>,
     line: &'a str,
     fields: Vec<&'a str>,
 }
@@ -52,6 +54,7 @@ impl<'a> Context<'a> {
         Context {
             awk_vars: AwkVariables::new(),
             vars: HashMap::new(),
+            arrays: HashMap::new(),
             line: "",
             fields: Vec::new(),
         }
@@ -117,6 +120,15 @@ impl<'a> fmt::Display for Value<'a> {
 }
 
 impl<'a> Value<'a> {
+    fn as_string(&self) -> String {
+        match self {
+            Value::Uninitialised => String::new(),
+            Value::Bool(v) => String::from(if *v { "1" } else { "0" }),
+            Value::String(s) => s.to_string(),
+            Value::Number(n) => n.to_string(),
+        }
+    }
+
     fn as_bool(&self) -> bool {
         match self {
             Value::Uninitialised => false,
