@@ -6,48 +6,78 @@ use std::{collections::HashMap, fmt};
 
 mod expr;
 
-#[derive(Default)]
 struct AwkVariables {
-    argc: usize,
-    argv: Vec<String>,
-    convfmt: String,
-    env: HashMap<String, String>,
-    filename: String,
+    ///// The number of arguments
+    //argc: usize,
+    ///// The command line arguments
+    //argv: Vec<String>,
+    //convfmt: String,
+    //env: HashMap<String, String>,
+    ///// The pathname to the current input file
+    //filename: String,
+    /// The ordinal number of the current record in the current file
     fnr: usize,
+    /// Input field separator regular expression
     fs: String,
+    /// The number of fields in the current record
     nf: usize,
+    /// The ordinal number of the current record from the start of input
     nr: usize,
-    ofmt: String,
-    ofs: String,
-    ors: String,
-    rlength: usize,
-    rs: String,
-    rstart: usize,
-    subsep: String,
+    /*ofmt: String,
+     *ofs: String,
+     *ors: String,
+     *rlength: usize,
+     *rs: String,
+     *rstart: usize,
+     *subsep: String, */
 }
 
+impl AwkVariables {
+    fn new() -> AwkVariables {
+        AwkVariables {
+            fnr: 0,
+            fs: String::from(" "),
+            nf: 0,
+            nr: 0,
+        }
+    }
+}
 struct Context<'a> {
-    vars: AwkVariables,
-    line: String,
-    split_line: Vec<&'a str>,
+    awk_vars: AwkVariables,
+    line: &'a str,
+    fields: Vec<&'a str>,
     //runtime: Runtime,
 }
 
 impl<'a> Context<'a> {
     fn new() -> Context<'a> {
         Context {
-            vars: Default::default(),
-            line: String::new(),
-            split_line: Vec::new(),
+            awk_vars: AwkVariables::new(),
+            line: "",
+            fields: Vec::new(),
         }
+    }
+
+    fn set_line(&mut self, line: &'a str) {
+        self.line = line;
+        self.fields = line.split(&self.awk_vars.fs).collect();
+        // update line numbers
+        self.awk_vars.fnr += 1;
+        self.awk_vars.nr += 1;
+        self.awk_vars.nf = self.fields.len();
     }
 }
 
+//#[derive(Default)]
+//struct Runtime {
+//vars: HashMap<LValueType, Value>,
+//}
+
 #[derive(Debug, PartialEq)]
 enum Value {
-    String(String),
-    Number(f64),
     Bool(bool),
+    Number(f64),
+    String(String),
 }
 
 impl From<f64> for Value {
@@ -127,11 +157,6 @@ impl Value {
         Value::Bool(res)
     }
 }
-
-//#[derive(Default)]
-//struct Runtime {
-//vars: HashMap<LValueType, Value>,
-//}
 
 trait Eval {
     fn eval(&self, cxt: &Context) -> Result<Value, EvaluationError>;

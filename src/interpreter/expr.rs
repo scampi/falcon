@@ -1,7 +1,7 @@
 use crate::{
     errors::EvaluationError,
     interpreter::{Context, Eval, Value},
-    parser::expr::Expr,
+    parser::expr::{Expr, LValueType},
 };
 
 impl Eval for Expr {
@@ -56,6 +56,19 @@ impl Eval for Expr {
                 } else {
                     Ok(Value::from(ko.eval(cxt)?))
                 }
+            },
+            Expr::LValue(lvalue) => match lvalue {
+                LValueType::Dollar(e) => {
+                    let index = e.eval(cxt)?.as_number() as usize;
+                    if index == 0 {
+                        return Ok(Value::from(cxt.line.to_owned()));
+                    }
+                    match cxt.fields.get(index - 1) {
+                        Some(field) => Ok(Value::from(field.to_string())),
+                        None => Ok(Value::from(String::new())),
+                    }
+                },
+                _ => unimplemented!(),
             },
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
             Expr::UnaryPlus(up) => up.eval(cxt),
@@ -275,5 +288,42 @@ mod tests {
         let res = expr.eval(&cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(4.0));
+    }
+
+    #[test]
+    fn lvalue() {
+        let mut cxt = Context::new();
+
+        cxt.set_line("john connor");
+
+        let expr = parse_expr_str("$0");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("john connor".to_owned()));
+
+        let expr = parse_expr_str("$1");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("john".to_owned()));
+
+        let expr = parse_expr_str("$2");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("connor".to_owned()));
+
+        let expr = parse_expr_str("$3");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(String::new()));
+
+        let expr = parse_expr_str("$(2 - 1)");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("john".to_owned()));
+
+        let expr = parse_expr_str("$(1 != 1)");
+        let res = expr.eval(&cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from("john connor".to_owned()));
     }
 }
