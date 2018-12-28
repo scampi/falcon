@@ -25,7 +25,7 @@ impl Eval for Expr {
                 if rvalue == 0.0 {
                     return Err(EvaluationError::DivisionByZero);
                 }
-                Ok(Value::Number(l.eval(cxt)?.as_number() / rvalue))
+                Ok(Value::from(l.eval(cxt)?.as_number() / rvalue))
             },
             Expr::Mul(l, r) => Ok(Value::from(
                 l.eval(cxt)?.as_number() * r.eval(cxt)?.as_number(),
@@ -73,9 +73,15 @@ impl Eval for Expr {
                         None => Ok(Value::Uninitialised),
                     }
                 },
-                LValueType::Name(name) => match cxt.vars.entry(name.as_str()) {
-                    Entry::Occupied(entry) => Ok(entry.get().clone()),
-                    Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
+                LValueType::Name(name) => match name.as_str() {
+                    "FNR" => Ok(Value::from(cxt.awk_vars.fnr)),
+                    "FS" => Ok(Value::from(cxt.awk_vars.fs.to_owned())),
+                    "NF" => Ok(Value::from(cxt.awk_vars.nf)),
+                    "NR" => Ok(Value::from(cxt.awk_vars.nr)),
+                    _ => match cxt.vars.entry(name) {
+                        Entry::Occupied(entry) => Ok(entry.get().clone()),
+                        Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
+                    },
                 },
                 _ => unimplemented!(),
             },
@@ -355,6 +361,6 @@ mod tests {
         let expr = parse_expr_str("nf");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap(), Value::from(0.0));
+        assert_eq!(res.unwrap(), Value::Uninitialised);
     }
 }

@@ -81,6 +81,12 @@ impl<'a> From<f64> for Value<'a> {
     }
 }
 
+impl<'a> From<usize> for Value<'a> {
+    fn from(value: usize) -> Value<'a> {
+        Value::Number(value as f64)
+    }
+}
+
 impl<'a> From<bool> for Value<'a> {
     fn from(value: bool) -> Value<'a> {
         Value::Bool(value)
