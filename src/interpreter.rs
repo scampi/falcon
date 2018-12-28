@@ -1,7 +1,4 @@
-use crate::{
-    errors::EvaluationError,
-    parser::expr::{CmpOperator, LValueType},
-};
+use crate::{errors::EvaluationError, parser::expr::CmpOperator};
 use std::{collections::HashMap, fmt};
 
 mod expr;
@@ -44,15 +41,16 @@ impl AwkVariables {
 }
 struct Context<'a> {
     awk_vars: AwkVariables,
+    vars: HashMap<String, Value>,
     line: &'a str,
     fields: Vec<&'a str>,
-    //runtime: Runtime,
 }
 
 impl<'a> Context<'a> {
     fn new() -> Context<'a> {
         Context {
             awk_vars: AwkVariables::new(),
+            vars: HashMap::new(),
             line: "",
             fields: Vec::new(),
         }
@@ -68,12 +66,7 @@ impl<'a> Context<'a> {
     }
 }
 
-//#[derive(Default)]
-//struct Runtime {
-//vars: HashMap<LValueType, Value>,
-//}
-
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum Value {
     Bool(bool),
     Number(f64),
@@ -159,5 +152,5 @@ impl Value {
 }
 
 trait Eval {
-    fn eval(&self, cxt: &Context) -> Result<Value, EvaluationError>;
+    fn eval(&self, cxt: &mut Context) -> Result<Value, EvaluationError>;
 }

@@ -3,9 +3,10 @@ use crate::{
     interpreter::{Context, Eval, Value},
     parser::expr::{Expr, LValueType},
 };
+use std::collections::hash_map::Entry;
 
 impl Eval for Expr {
-    fn eval(&self, cxt: &Context) -> Result<Value, EvaluationError> {
+    fn eval(&self, cxt: &mut Context) -> Result<Value, EvaluationError> {
         match self {
             Expr::Mod(l, r) => Ok(Value::from(
                 l.eval(cxt)?.as_number() % r.eval(cxt)?.as_number(),
@@ -68,6 +69,10 @@ impl Eval for Expr {
                         None => Ok(Value::from(String::new())),
                     }
                 },
+                LValueType::Name(name) => match cxt.vars.entry(name.to_owned()) {
+                    Entry::Occupied(entry) => Ok(entry.get().clone()),
+                    Entry::Vacant(entry) => Ok(entry.insert(Value::from(String::new())).clone()),
+                },
                 _ => unimplemented!(),
             },
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
@@ -87,205 +92,205 @@ mod tests {
 
     #[test]
     fn arithmetic() {
-        let cxt = Context::new();
+        let mut cxt = Context::new();
 
         let expr = parse_expr_str("1 + 2");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), 3f64);
 
         let expr = parse_expr_str("1 - 2");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), -1f64);
 
         let expr = parse_expr_str("1 / 2");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), 0.5);
 
         let expr = parse_expr_str("2 * 3");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), 6f64);
 
         let expr = parse_expr_str("2 / 0");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
 
         let expr = parse_expr_str(r#"2 / "a""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
 
         let expr = parse_expr_str(r#"2 * "a""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), 0.0);
 
         let expr = parse_expr_str("2 ^ 3");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), 8.0);
 
         let expr = parse_expr_str("(2 + 1) ^ 3");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), 27.0);
 
         let expr = parse_expr_str("7 % 3");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), 1.0);
 
         let expr = parse_expr_str("- 2 ^ 3");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), -8.0);
 
         let expr = parse_expr_str(r#"2 + "3""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap().as_number(), 5.0);
     }
 
     #[test]
     fn comparison() {
-        let cxt = Context::new();
+        let mut cxt = Context::new();
 
         let expr = parse_expr_str("2 < 3");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("2 > 3");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
 
         let expr = parse_expr_str(r#"2 == "2""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""2" == 2"#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""a" == "b""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
 
         let expr = parse_expr_str(r#""1" < "a""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""a" < "b""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""a" > "b""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
     }
 
     #[test]
     fn concat() {
-        let cxt = Context::new();
+        let mut cxt = Context::new();
 
         let expr = parse_expr_str(r#"1 " aaa " 2"#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("1 aaa 2".to_owned()));
 
         let expr = parse_expr_str(r#""aaa" (1 < 2)"#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("aaa1".to_owned()));
 
         let expr = parse_expr_str(r#""aaa" (1 == 2)"#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("aaa0".to_owned()));
 
         let expr = parse_expr_str("1 2");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("12".to_owned()));
     }
 
     #[test]
     fn logical_operation() {
-        let cxt = Context::new();
+        let mut cxt = Context::new();
 
         let expr = parse_expr_str("1 && 2");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""" && 2"#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
 
         let expr = parse_expr_str(r#"1 && "2""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("1 && 0");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
 
         let expr = parse_expr_str("1 < 2 && 3");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("0 || 1");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("1 || 0");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("!(1 || 0)");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
     }
 
     #[test]
     fn conditional() {
-        let cxt = Context::new();
+        let mut cxt = Context::new();
 
         let expr = parse_expr_str(r#"1 == 1 ? "OK" : "KO""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("OK".to_owned()));
 
         let expr = parse_expr_str(r#"1 != 1 ? "OK" : "KO""#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("KO".to_owned()));
 
         let expr = parse_expr_str(r#"(1 == 1 ? "OK" : 2) + 2"#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(2.0));
 
         let expr = parse_expr_str(r#"(1 < 1 ? "OK" : 2) + 2"#);
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(4.0));
     }
@@ -297,32 +302,32 @@ mod tests {
         cxt.set_line("john connor");
 
         let expr = parse_expr_str("$0");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("john connor".to_owned()));
 
         let expr = parse_expr_str("$1");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("john".to_owned()));
 
         let expr = parse_expr_str("$2");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("connor".to_owned()));
 
         let expr = parse_expr_str("$3");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(String::new()));
 
         let expr = parse_expr_str("$(2 - 1)");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("john".to_owned()));
 
         let expr = parse_expr_str("$(1 != 1)");
-        let res = expr.eval(&cxt);
+        let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("john connor".to_owned()));
     }
