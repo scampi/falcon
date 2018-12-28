@@ -39,6 +39,7 @@ impl AwkVariables {
         }
     }
 }
+
 struct Context<'a> {
     awk_vars: AwkVariables,
     vars: HashMap<&'a str, Value<'a>>,
@@ -68,6 +69,7 @@ impl<'a> Context<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 enum Value<'a> {
+    Uninitialised,
     Bool(bool),
     Number(f64),
     String(Cow<'a, str>),
@@ -94,6 +96,7 @@ impl<'a> From<String> for Value<'a> {
 impl<'a> fmt::Display for Value<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Value::Uninitialised => Ok(()),
             Value::Number(n) => write!(f, "{}", n),
             Value::String(s) => write!(f, "{}", s),
             Value::Bool(b) => {
@@ -110,6 +113,7 @@ impl<'a> fmt::Display for Value<'a> {
 impl<'a> Value<'a> {
     fn as_bool(&self) -> bool {
         match self {
+            Value::Uninitialised => false,
             Value::Bool(v) => *v,
             Value::String(s) => !s.is_empty(),
             Value::Number(n) => *n != 0.0,
@@ -118,6 +122,7 @@ impl<'a> Value<'a> {
 
     fn as_number(&self) -> f64 {
         match self {
+            Value::Uninitialised => 0.0,
             Value::Bool(v) => {
                 if *v {
                     1.0
@@ -144,6 +149,9 @@ impl<'a> Value<'a> {
                 Ok(num) => op.compare(&num, b),
                 Err(_) => op.compare(a, &Cow::from(b.to_string())),
             },
+            (Value::Number(a), Value::Uninitialised) => op.compare(a, &0.0),
+            (Value::Uninitialised, Value::Number(b)) => op.compare(&0.0, b),
+            (Value::Uninitialised, Value::Uninitialised) => op.compare(&0.0, &0.0),
             (Value::String(a), Value::String(b)) => op.compare(a, b),
             _ => unreachable!(),
         };

@@ -70,12 +70,12 @@ impl Eval for Expr {
                     }
                     match cxt.fields.get(index - 1) {
                         Some(&field) => Ok(Value::String(Cow::from(field))),
-                        None => Ok(Value::from(String::new())),
+                        None => Ok(Value::Uninitialised),
                     }
                 },
                 LValueType::Name(name) => match cxt.vars.entry(name.as_str()) {
                     Entry::Occupied(entry) => Ok(entry.get().clone()),
-                    Entry::Vacant(entry) => Ok(entry.insert(Value::from(String::new())).clone()),
+                    Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
                 },
                 _ => unimplemented!(),
             },
@@ -300,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn lvalue() {
+    fn field_lvalue() {
         let mut cxt = Context::new();
 
         cxt.set_line("john connor");
@@ -323,7 +323,12 @@ mod tests {
         let expr = parse_expr_str("$3");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap(), Value::from(String::new()));
+        assert_eq!(res.unwrap(), Value::Uninitialised);
+
+        let expr = parse_expr_str("$(1 - 2)");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::Uninitialised);
 
         let expr = parse_expr_str("$(2 - 1)");
         let res = expr.eval(&mut cxt);
@@ -334,5 +339,22 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("john connor".to_owned()));
+    }
+
+    #[test]
+    fn var_lvalue() {
+        let mut cxt = Context::new();
+
+        cxt.set_line("john connor");
+
+        let expr = parse_expr_str("NF");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(2.0));
+
+        let expr = parse_expr_str("nf");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(0.0));
     }
 }
