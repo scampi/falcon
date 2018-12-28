@@ -1,5 +1,5 @@
 use crate::{errors::EvaluationError, parser::expr::CmpOperator};
-use std::{collections::HashMap, fmt};
+use std::{borrow::Cow, collections::HashMap, fmt};
 
 mod expr;
 
@@ -41,7 +41,7 @@ impl AwkVariables {
 }
 struct Context<'a> {
     awk_vars: AwkVariables,
-    vars: HashMap<&'a str, Value>,
+    vars: HashMap<&'a str, Value<'a>>,
     line: &'a str,
     fields: Vec<&'a str>,
 }
@@ -67,31 +67,31 @@ impl<'a> Context<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum Value {
+enum Value<'a> {
     Bool(bool),
     Number(f64),
-    String(String),
+    String(Cow<'a, str>),
 }
 
-impl From<f64> for Value {
-    fn from(value: f64) -> Value {
+impl<'a> From<f64> for Value<'a> {
+    fn from(value: f64) -> Value<'a> {
         Value::Number(value)
     }
 }
 
-impl From<bool> for Value {
-    fn from(value: bool) -> Value {
+impl<'a> From<bool> for Value<'a> {
+    fn from(value: bool) -> Value<'a> {
         Value::Bool(value)
     }
 }
 
-impl From<String> for Value {
-    fn from(value: String) -> Value {
-        Value::String(value)
+impl<'a> From<String> for Value<'a> {
+    fn from(value: String) -> Value<'a> {
+        Value::String(Cow::from(value))
     }
 }
 
-impl fmt::Display for Value {
+impl<'a> fmt::Display for Value<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Number(n) => write!(f, "{}", n),
@@ -107,7 +107,7 @@ impl fmt::Display for Value {
     }
 }
 
-impl Value {
+impl<'a> Value<'a> {
     fn as_bool(&self) -> bool {
         match self {
             Value::Bool(v) => *v,
@@ -133,16 +133,16 @@ impl Value {
         }
     }
 
-    fn compare(op: &CmpOperator, a: &Value, b: &Value) -> Value {
+    fn compare(op: &CmpOperator, a: &Value<'a>, b: &Value<'a>) -> Value<'a> {
         let res = match (a, b) {
             (Value::Number(a), Value::Number(b)) => op.compare(a, b),
             (Value::Number(a), Value::String(b)) => match b.parse::<f64>() {
                 Ok(num) => op.compare(a, &num),
-                Err(_) => op.compare(&a.to_string(), b),
+                Err(_) => op.compare(&Cow::from(a.to_string()), b),
             },
             (Value::String(a), Value::Number(b)) => match a.parse::<f64>() {
                 Ok(num) => op.compare(&num, b),
-                Err(_) => op.compare(a, &b.to_string()),
+                Err(_) => op.compare(a, &Cow::from(b.to_string())),
             },
             (Value::String(a), Value::String(b)) => op.compare(a, b),
             _ => unreachable!(),

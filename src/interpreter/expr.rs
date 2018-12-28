@@ -3,7 +3,7 @@ use crate::{
     interpreter::{Context, Eval, Value},
     parser::expr::{Expr, LValueType},
 };
-use std::collections::hash_map::Entry;
+use std::{borrow::Cow, collections::hash_map::Entry};
 
 impl Eval for Expr {
     fn eval<'a>(&'a self, cxt: &mut Context<'a>) -> Result<Value, EvaluationError> {
@@ -35,7 +35,11 @@ impl Eval for Expr {
                 let rvalue = r.eval(cxt)?;
                 Ok(Value::compare(op, &lvalue, &rvalue))
             },
-            Expr::Concat(l, r) => Ok(Value::String(format!("{}{}", l.eval(cxt)?, r.eval(cxt)?))),
+            Expr::Concat(l, r) => Ok(Value::String(Cow::from(format!(
+                "{}{}",
+                l.eval(cxt)?,
+                r.eval(cxt)?
+            )))),
             Expr::LogicalAnd(l, r) => {
                 if l.eval(cxt)?.as_bool() {
                     Ok(Value::from(r.eval(cxt)?.as_bool()))
@@ -62,10 +66,10 @@ impl Eval for Expr {
                 LValueType::Dollar(e) => {
                     let index = e.eval(cxt)?.as_number() as usize;
                     if index == 0 {
-                        return Ok(Value::from(cxt.line.to_owned()));
+                        return Ok(Value::String(Cow::from(cxt.line)));
                     }
                     match cxt.fields.get(index - 1) {
-                        Some(field) => Ok(Value::from(field.to_string())),
+                        Some(&field) => Ok(Value::String(Cow::from(field))),
                         None => Ok(Value::from(String::new())),
                     }
                 },
@@ -79,7 +83,7 @@ impl Eval for Expr {
             Expr::UnaryPlus(up) => up.eval(cxt),
             Expr::Grouping(g) => g.eval(cxt),
             Expr::Number(n) => Ok(Value::from(*n)),
-            Expr::String(s) => Ok(Value::from(s.to_owned())),
+            Expr::String(s) => Ok(Value::String(Cow::from(s))),
             _ => unimplemented!(),
         }
     }
@@ -97,22 +101,22 @@ mod tests {
         let expr = parse_expr_str("1 + 2");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), 3f64);
+        assert_eq!(res.unwrap(), Value::from(3f64));
 
         let expr = parse_expr_str("1 - 2");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), -1f64);
+        assert_eq!(res.unwrap(), Value::from(-1f64));
 
         let expr = parse_expr_str("1 / 2");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), 0.5);
+        assert_eq!(res.unwrap(), Value::from(0.5));
 
         let expr = parse_expr_str("2 * 3");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), 6f64);
+        assert_eq!(res.unwrap(), Value::from(6f64));
 
         let expr = parse_expr_str("2 / 0");
         let res = expr.eval(&mut cxt);
@@ -127,32 +131,32 @@ mod tests {
         let expr = parse_expr_str(r#"2 * "a""#);
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), 0.0);
+        assert_eq!(res.unwrap(), Value::from(0.0));
 
         let expr = parse_expr_str("2 ^ 3");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), 8.0);
+        assert_eq!(res.unwrap(), Value::from(8.0));
 
         let expr = parse_expr_str("(2 + 1) ^ 3");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), 27.0);
+        assert_eq!(res.unwrap(), Value::from(27.0));
 
         let expr = parse_expr_str("7 % 3");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), 1.0);
+        assert_eq!(res.unwrap(), Value::from(1.0));
 
         let expr = parse_expr_str("- 2 ^ 3");
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), -8.0);
+        assert_eq!(res.unwrap(), Value::from(-8.0));
 
         let expr = parse_expr_str(r#"2 + "3""#);
         let res = expr.eval(&mut cxt);
         assert!(res.is_ok());
-        assert_eq!(res.unwrap().as_number(), 5.0);
+        assert_eq!(res.unwrap(), Value::from(5.0));
     }
 
     #[test]
