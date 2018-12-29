@@ -1,7 +1,7 @@
 use crate::{
     errors::EvaluationError,
     interpreter::{Context, Eval, Value},
-    parser::expr::{Expr, LValueType},
+    parser::expr::{AssignType, Expr, LValueType},
 };
 use std::{
     borrow::Cow,
@@ -81,6 +81,7 @@ impl Eval for Expr {
                     "FS" => Ok(Value::from(cxt.awk_vars.fs.to_owned())),
                     "NF" => Ok(Value::from(cxt.awk_vars.nf)),
                     "NR" => Ok(Value::from(cxt.awk_vars.nr)),
+                    "SUBSEP" => Ok(Value::from(cxt.awk_vars.subsep.to_owned())),
                     _ => match cxt.vars.entry(name) {
                         Entry::Occupied(entry) => Ok(entry.get().clone()),
                         Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
@@ -107,6 +108,31 @@ impl Eval for Expr {
                         },
                     }
                 },
+            },
+            Expr::Assign(ty, lvalue, rvalue) => {
+                let new_value = rvalue.eval(cxt)?;
+                match lvalue {
+                    LValueType::Name(name) => match ty {
+                        AssignType::Normal => {
+                            let ret = Ok(new_value.clone());
+                            cxt.vars.insert(name, new_value);
+                            ret
+                        },
+                        _ => match cxt.vars.entry(name) {
+                            Entry::Occupied(mut entry) => {
+                                let result = Value::compute(ty, entry.get(), &new_value)?;
+                                entry.insert(result.clone());
+                                Ok(result)
+                            },
+                            Entry::Vacant(entry) => {
+                                let result = Value::compute(ty, &Value::Uninitialised, &new_value)?;
+                                entry.insert(result.clone());
+                                Ok(result)
+                            },
+                        },
+                    },
+                    _ => unimplemented!(),
+                }
             },
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
             Expr::UnaryPlus(up) => up.eval(cxt),
@@ -420,5 +446,71 @@ mod tests {
             cxt.arrays.get("b").unwrap().get("0#1#2"),
             Some(&Value::Uninitialised)
         );
+    }
+
+    #[test]
+    fn assignment() {
+        let mut cxt = Context::new();
+
+        let expr = parse_expr_str("a = 42");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(42));
+        assert_eq!(cxt.vars.get("a"), Some(&Value::from(42)));
+
+        let expr = parse_expr_str("a = b = 5");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(5));
+        assert_eq!(cxt.vars.get("a"), Some(&Value::from(5)));
+        assert_eq!(cxt.vars.get("b"), Some(&Value::from(5)));
+
+        let expr = parse_expr_str("a ^= 2");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(25));
+        assert_eq!(cxt.vars.get("a"), Some(&Value::from(25)));
+
+        let expr = parse_expr_str("a = 2 + 3");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        let expr = parse_expr_str("a *= 2");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(10));
+        assert_eq!(cxt.vars.get("a"), Some(&Value::from(10)));
+
+        let expr = parse_expr_str("a = 2 + 3");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        let expr = parse_expr_str("a /= 2");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(2.5));
+        assert_eq!(cxt.vars.get("a"), Some(&Value::from(2.5)));
+
+        let expr = parse_expr_str("a = 2 + 3");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        let expr = parse_expr_str("a -= 2");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(3));
+        assert_eq!(cxt.vars.get("a"), Some(&Value::from(3)));
+
+        let expr = parse_expr_str("a = 2 + 3");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        let expr = parse_expr_str("a %= 2");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(1));
+        assert_eq!(cxt.vars.get("a"), Some(&Value::from(1)));
+
+        let expr = parse_expr_str("c /= 2");
+        let res = expr.eval(&mut cxt);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Value::from(0));
+        assert_eq!(cxt.vars.get("c"), Some(&Value::from(0)));
     }
 }

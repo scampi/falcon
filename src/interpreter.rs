@@ -1,4 +1,7 @@
-use crate::{errors::EvaluationError, parser::expr::CmpOperator};
+use crate::{
+    errors::EvaluationError,
+    parser::expr::{AssignType, CmpOperator},
+};
 use std::{borrow::Cow, collections::HashMap, fmt};
 
 mod expr;
@@ -174,6 +177,29 @@ impl<'a> Value<'a> {
             _ => unreachable!(),
         };
         Value::Bool(res)
+    }
+
+    fn compute(
+        op: &AssignType,
+        a: &Value<'a>,
+        b: &Value<'a>,
+    ) -> Result<Value<'a>, EvaluationError> {
+        let result = match op {
+            AssignType::Pow => a.as_number().powf(b.as_number()),
+            AssignType::Mod => a.as_number() % b.as_number(),
+            AssignType::Mul => a.as_number() * b.as_number(),
+            AssignType::Div => {
+                let bnum = b.as_number();
+                if bnum == 0.0 {
+                    return Err(EvaluationError::DivisionByZero);
+                }
+                a.as_number() / bnum
+            },
+            AssignType::Add => a.as_number() + b.as_number(),
+            AssignType::Sub => a.as_number() - b.as_number(),
+            _ => unreachable!(),
+        };
+        Ok(Value::from(result))
     }
 }
 
