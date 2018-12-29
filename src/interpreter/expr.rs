@@ -67,11 +67,14 @@ impl Eval for Expr {
             },
             Expr::LValue(lvalue) => match lvalue {
                 LValueType::Dollar(e) => {
-                    let index = e.eval(cxt)?.as_number() as usize;
+                    let index = e.eval(cxt)?.as_number() as isize;
+                    if index < 0 {
+                        return Err(EvaluationError::NegativeFieldIndex(index));
+                    }
                     if index == 0 {
                         return Ok(Value::String(Cow::from(cxt.line)));
                     }
-                    match cxt.fields.get(index - 1) {
+                    match cxt.fields.get(index as usize - 1) {
                         Some(&field) => Ok(Value::String(Cow::from(field))),
                         None => Ok(Value::Uninitialised),
                     }
@@ -155,62 +158,50 @@ mod tests {
 
         let expr = parse_expr_str("1 + 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(3f64));
 
         let expr = parse_expr_str("1 - 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(-1f64));
 
         let expr = parse_expr_str("1 / 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(0.5));
 
         let expr = parse_expr_str("2 * 3");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(6f64));
 
         let expr = parse_expr_str("2 / 0");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_err());
         assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
 
         let expr = parse_expr_str(r#"2 / "a""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_err());
         assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
 
         let expr = parse_expr_str(r#"2 * "a""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(0.0));
 
         let expr = parse_expr_str("2 ^ 3");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(8.0));
 
         let expr = parse_expr_str("(2 + 1) ^ 3");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(27.0));
 
         let expr = parse_expr_str("7 % 3");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(1.0));
 
         let expr = parse_expr_str("- 2 ^ 3");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(-8.0));
 
         let expr = parse_expr_str(r#"2 + "3""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(5.0));
     }
 
@@ -220,42 +211,34 @@ mod tests {
 
         let expr = parse_expr_str("2 < 3");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("2 > 3");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
 
         let expr = parse_expr_str(r#"2 == "2""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""2" == 2"#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""a" == "b""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
 
         let expr = parse_expr_str(r#""1" < "a""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""a" < "b""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""a" > "b""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
     }
 
@@ -265,22 +248,18 @@ mod tests {
 
         let expr = parse_expr_str(r#"1 " aaa " 2"#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("1 aaa 2".to_owned()));
 
         let expr = parse_expr_str(r#""aaa" (1 < 2)"#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("aaa1".to_owned()));
 
         let expr = parse_expr_str(r#""aaa" (1 == 2)"#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("aaa0".to_owned()));
 
         let expr = parse_expr_str("1 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("12".to_owned()));
     }
 
@@ -290,42 +269,34 @@ mod tests {
 
         let expr = parse_expr_str("1 && 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str(r#""" && 2"#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
 
         let expr = parse_expr_str(r#"1 && "2""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("1 && 0");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
 
         let expr = parse_expr_str("1 < 2 && 3");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("0 || 1");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("1 || 0");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(true));
 
         let expr = parse_expr_str("!(1 || 0)");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(false));
     }
 
@@ -335,22 +306,18 @@ mod tests {
 
         let expr = parse_expr_str(r#"1 == 1 ? "OK" : "KO""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("OK".to_owned()));
 
         let expr = parse_expr_str(r#"1 != 1 ? "OK" : "KO""#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("KO".to_owned()));
 
         let expr = parse_expr_str(r#"(1 == 1 ? "OK" : 2) + 2"#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(2.0));
 
         let expr = parse_expr_str(r#"(1 < 1 ? "OK" : 2) + 2"#);
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(4.0));
     }
 
@@ -362,55 +329,46 @@ mod tests {
 
         let expr = parse_expr_str("$0");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("john connor".to_owned()));
 
         let expr = parse_expr_str("$1");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("john".to_owned()));
 
         let expr = parse_expr_str("$2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("connor".to_owned()));
 
         let expr = parse_expr_str("$3");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
-        assert_eq!(res.unwrap(), Value::Uninitialised);
-
-        let expr = parse_expr_str("$(1 - 2)");
-        let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::Uninitialised);
 
         let expr = parse_expr_str("$(2 - 1)");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("john".to_owned()));
 
         let expr = parse_expr_str("$(1 != 1)");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from("john connor".to_owned()));
+
+        let expr = parse_expr_str("$(-42)");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap_err(), EvaluationError::NegativeFieldIndex(-42));
     }
 
     #[test]
     fn var_lvalue() {
         let mut cxt = Context::new();
 
-        cxt.set_line("john connor");
+        cxt.set_next_line("john connor");
 
         let expr = parse_expr_str("NF");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(2.0));
         assert!(cxt.vars.is_empty());
 
         let expr = parse_expr_str("nf");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(cxt.vars.get("nf"), Some(&Value::Uninitialised));
     }
@@ -421,7 +379,6 @@ mod tests {
 
         let expr = parse_expr_str("a[0]");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(
             cxt.arrays.get("a").unwrap().get("0"),
@@ -430,7 +387,6 @@ mod tests {
 
         let expr = parse_expr_str("b[0,1,2]");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(
             cxt.arrays.get("b").unwrap().get("012"),
@@ -440,7 +396,6 @@ mod tests {
         cxt.awk_vars.subsep = String::from("#");
         let expr = parse_expr_str("b[0,1,2]");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(
             cxt.arrays.get("b").unwrap().get("0#1#2"),
@@ -449,67 +404,55 @@ mod tests {
     }
 
     #[test]
-    fn assignment() {
+    fn assignment_name_lvalue() {
         let mut cxt = Context::new();
 
         let expr = parse_expr_str("a = 42");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(42));
         assert_eq!(cxt.vars.get("a"), Some(&Value::from(42)));
 
         let expr = parse_expr_str("a = b = 5");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(5));
         assert_eq!(cxt.vars.get("a"), Some(&Value::from(5)));
         assert_eq!(cxt.vars.get("b"), Some(&Value::from(5)));
 
         let expr = parse_expr_str("a ^= 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(25));
         assert_eq!(cxt.vars.get("a"), Some(&Value::from(25)));
 
         let expr = parse_expr_str("a = 2 + 3");
-        let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
+        expr.eval(&mut cxt).unwrap();
         let expr = parse_expr_str("a *= 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(10));
         assert_eq!(cxt.vars.get("a"), Some(&Value::from(10)));
 
         let expr = parse_expr_str("a = 2 + 3");
-        let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
+        expr.eval(&mut cxt).unwrap();
         let expr = parse_expr_str("a /= 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(2.5));
         assert_eq!(cxt.vars.get("a"), Some(&Value::from(2.5)));
 
         let expr = parse_expr_str("a = 2 + 3");
-        let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
+        expr.eval(&mut cxt).unwrap();
         let expr = parse_expr_str("a -= 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(3));
         assert_eq!(cxt.vars.get("a"), Some(&Value::from(3)));
 
         let expr = parse_expr_str("a = 2 + 3");
-        let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
+        expr.eval(&mut cxt).unwrap();
         let expr = parse_expr_str("a %= 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(1));
         assert_eq!(cxt.vars.get("a"), Some(&Value::from(1)));
 
         let expr = parse_expr_str("c /= 2");
         let res = expr.eval(&mut cxt);
-        assert!(res.is_ok());
         assert_eq!(res.unwrap(), Value::from(0));
         assert_eq!(cxt.vars.get("c"), Some(&Value::from(0)));
     }

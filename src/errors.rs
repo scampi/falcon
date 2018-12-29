@@ -4,4 +4,6 @@ use failure_derive::Fail;
 pub enum EvaluationError {
     #[fail(display = "division by zero attempted")]
     DivisionByZero,
+    #[fail(display = "attempt to access field {}", _0)]
+    NegativeFieldIndex(isize),
 }
