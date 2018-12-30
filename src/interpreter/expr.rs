@@ -72,13 +72,9 @@ impl Eval for Expr {
                         None => Ok(Value::Uninitialised),
                     }
                 },
-                LValueType::Name(name) => match name.as_str() {
-                    "FNR" => Ok(Value::from(cxt.awk_vars.fnr)),
-                    "FS" => Ok(Value::from(cxt.awk_vars.fs.to_owned())),
-                    "NF" => Ok(Value::from(cxt.awk_vars.nf)),
-                    "NR" => Ok(Value::from(cxt.awk_vars.nr)),
-                    "SUBSEP" => Ok(Value::from(cxt.awk_vars.subsep.to_owned())),
-                    _ => match cxt.vars.entry(name.to_owned()) {
+                LValueType::Name(name) => match cxt.awk_vars.get(&name) {
+                    Some(value) => Ok(value),
+                    None => match cxt.vars.entry(name.to_owned()) {
                         Entry::Occupied(entry) => Ok(entry.get().clone()),
                         Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
                     },
@@ -111,25 +107,38 @@ impl Eval for Expr {
                     LValueType::Name(name) => match ty {
                         AssignType::Normal => {
                             let ret = Ok(new_value.clone());
-                            cxt.vars.insert(name.to_owned(), new_value);
+                            if !cxt.awk_vars.set(name, &new_value) {
+                                cxt.vars.insert(name.to_owned(), new_value);
+                            }
                             ret
                         },
-                        _ => match cxt.vars.entry(name.to_owned()) {
-                            Entry::Occupied(mut entry) => {
-                                let result =
-                                    Value::from(Value::compute(ty, entry.get(), &new_value)?);
-                                entry.insert(result.clone());
-                                Ok(result)
-                            },
-                            Entry::Vacant(entry) => {
+                        _ => {
+                            if let Some(value) = cxt.awk_vars.get(name) {
                                 let result = Value::from(Value::compute(
                                     ty,
-                                    &Value::Uninitialised,
+                                    &Value::from(value),
                                     &new_value,
                                 )?);
-                                entry.insert(result.clone());
-                                Ok(result)
-                            },
+                                cxt.awk_vars.set(name, &result);
+                                return Ok(result);
+                            }
+                            match cxt.vars.entry(name.to_owned()) {
+                                Entry::Occupied(mut entry) => {
+                                    let result =
+                                        Value::from(Value::compute(ty, entry.get(), &new_value)?);
+                                    entry.insert(result.clone());
+                                    Ok(result)
+                                },
+                                Entry::Vacant(entry) => {
+                                    let result = Value::from(Value::compute(
+                                        ty,
+                                        &Value::Uninitialised,
+                                        &new_value,
+                                    )?);
+                                    entry.insert(result.clone());
+                                    Ok(result)
+                                },
+                            }
                         },
                     },
                     LValueType::Dollar(e) => {
@@ -487,6 +496,16 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(0));
         assert_eq!(cxt.vars.get("c"), Some(&Value::from(0)));
+
+        let expr = parse_expr_str(r#"FS = "@""#);
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("@".to_owned()));
+        assert_eq!(cxt.awk_vars.fs, "@".to_owned());
+
+        let expr = parse_expr_str(r#"FS *= 2"#);
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(0));
+        assert_eq!(cxt.awk_vars.fs, "0".to_owned());
     }
 
     #[test]

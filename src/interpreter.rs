@@ -42,6 +42,29 @@ impl AwkVariables {
             subsep: String::new(),
         }
     }
+
+    fn get(&self, field: &str) -> Option<Value> {
+        match field {
+            "FNR" => Some(Value::from(self.fnr)),
+            "FS" => Some(Value::from(self.fs.to_owned())),
+            "NF" => Some(Value::from(self.nf)),
+            "NR" => Some(Value::from(self.nr)),
+            "SUBSEP" => Some(Value::from(self.subsep.to_owned())),
+            _ => None,
+        }
+    }
+
+    fn set(&mut self, field: &str, value: &Value) -> bool {
+        match field {
+            "FNR" => self.fnr = value.as_number() as usize,
+            "FS" => self.fs = value.as_string(),
+            "NF" => self.nf = value.as_number() as usize,
+            "NR" => self.nr = value.as_number() as usize,
+            "SUBSEP" => self.subsep = value.as_string(),
+            _ => return false,
+        }
+        true
+    }
 }
 
 struct Context {
