@@ -2,7 +2,7 @@ use crate::{
     errors::EvaluationError,
     parser::expr::{AssignType, CmpOperator},
 };
-use std::{borrow::Cow, collections::HashMap, fmt};
+use std::{collections::HashMap, fmt};
 
 mod expr;
 
@@ -44,68 +44,94 @@ impl AwkVariables {
     }
 }
 
-struct Context<'a> {
+struct Context {
     awk_vars: AwkVariables,
-    vars: HashMap<&'a str, Value<'a>>,
-    arrays: HashMap<&'a str, HashMap<String, Value<'a>>>,
-    line: &'a str,
-    fields: Vec<&'a str>,
+    vars: HashMap<String, Value>,
+    arrays: HashMap<String, HashMap<String, Value>>,
+    line: String,
+    fields: Vec<String>,
 }
 
-impl<'a> Context<'a> {
-    fn new() -> Context<'a> {
+impl Context {
+    fn new() -> Context {
         Context {
             awk_vars: AwkVariables::new(),
             vars: HashMap::new(),
             arrays: HashMap::new(),
-            line: "",
+            line: String::new(),
             fields: Vec::new(),
         }
     }
 
-    fn set_line(&mut self, line: &'a str) {
-        self.line = line;
-        self.fields = line.split(&self.awk_vars.fs).collect();
+    fn set_next_line(&mut self, line: String) {
+        self.update_line(line);
         // update line numbers
         self.awk_vars.fnr += 1;
         self.awk_vars.nr += 1;
+    }
+
+    fn update_line(&mut self, line: String) {
+        self.line = line;
+        self.fields = self
+            .line
+            .split(&self.awk_vars.fs)
+            .map(|s| s.to_owned())
+            .collect();
         self.awk_vars.nf = self.fields.len();
+    }
+
+    fn update_field<F>(&mut self, index: usize, field: F) -> Result<(), EvaluationError>
+    where
+        F: Fn(Option<&str>) -> Result<String, EvaluationError>,
+    {
+        match self.fields.get_mut(index) {
+            Some(f) => *f = field(Some(f))?,
+            None => {
+                for _ in 0..index - self.fields.len() {
+                    self.fields.push(String::new());
+                }
+                self.fields.push(field(None)?);
+            },
+        }
+        self.line = self.fields.join(&self.awk_vars.fs);
+        self.awk_vars.nf = self.fields.len();
+        Ok(())
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum Value<'a> {
+enum Value {
     Uninitialised,
     Bool(bool),
     Number(f64),
-    String(Cow<'a, str>),
+    String(String),
 }
 
-impl<'a> From<f64> for Value<'a> {
-    fn from(value: f64) -> Value<'a> {
+impl From<f64> for Value {
+    fn from(value: f64) -> Value {
         Value::Number(value)
     }
 }
 
-impl<'a> From<usize> for Value<'a> {
-    fn from(value: usize) -> Value<'a> {
+impl From<usize> for Value {
+    fn from(value: usize) -> Value {
         Value::Number(value as f64)
     }
 }
 
-impl<'a> From<bool> for Value<'a> {
-    fn from(value: bool) -> Value<'a> {
+impl From<bool> for Value {
+    fn from(value: bool) -> Value {
         Value::Bool(value)
     }
 }
 
-impl<'a> From<String> for Value<'a> {
-    fn from(value: String) -> Value<'a> {
-        Value::String(Cow::from(value))
+impl From<String> for Value {
+    fn from(value: String) -> Value {
+        Value::String(value)
     }
 }
 
-impl<'a> fmt::Display for Value<'a> {
+impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Uninitialised => Ok(()),
@@ -122,7 +148,7 @@ impl<'a> fmt::Display for Value<'a> {
     }
 }
 
-impl<'a> Value<'a> {
+impl Value {
     fn as_string(&self) -> String {
         match self {
             Value::Uninitialised => String::new(),
@@ -159,16 +185,16 @@ impl<'a> Value<'a> {
         }
     }
 
-    fn compare(op: &CmpOperator, a: &Value<'a>, b: &Value<'a>) -> Value<'a> {
+    fn compare(op: &CmpOperator, a: &Value, b: &Value) -> Value {
         let res = match (a, b) {
             (Value::Number(a), Value::Number(b)) => op.compare(a, b),
             (Value::Number(a), Value::String(b)) => match b.parse::<f64>() {
                 Ok(num) => op.compare(a, &num),
-                Err(_) => op.compare(&Cow::from(a.to_string()), b),
+                Err(_) => op.compare(&a.to_string(), b),
             },
             (Value::String(a), Value::Number(b)) => match a.parse::<f64>() {
                 Ok(num) => op.compare(&num, b),
-                Err(_) => op.compare(a, &Cow::from(b.to_string())),
+                Err(_) => op.compare(a, &b.to_string()),
             },
             (Value::Number(a), Value::Uninitialised) => op.compare(a, &0.0),
             (Value::Uninitialised, Value::Number(b)) => op.compare(&0.0, b),
@@ -179,11 +205,7 @@ impl<'a> Value<'a> {
         Value::Bool(res)
     }
 
-    fn compute(
-        op: &AssignType,
-        a: &Value<'a>,
-        b: &Value<'a>,
-    ) -> Result<Value<'a>, EvaluationError> {
+    fn compute(op: &AssignType, a: &Value, b: &Value) -> Result<f64, EvaluationError> {
         let result = match op {
             AssignType::Pow => a.as_number().powf(b.as_number()),
             AssignType::Mod => a.as_number() % b.as_number(),
@@ -199,10 +221,10 @@ impl<'a> Value<'a> {
             AssignType::Sub => a.as_number() - b.as_number(),
             _ => unreachable!(),
         };
-        Ok(Value::from(result))
+        Ok(result)
     }
 }
 
 trait Eval {
-    fn eval<'a>(&'a self, cxt: &mut Context<'a>) -> Result<Value, EvaluationError>;
+    fn eval(&self, cxt: &mut Context) -> Result<Value, EvaluationError>;
 }

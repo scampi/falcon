@@ -3,13 +3,10 @@ use crate::{
     interpreter::{Context, Eval, Value},
     parser::expr::{AssignType, Expr, LValueType},
 };
-use std::{
-    borrow::Cow,
-    collections::{hash_map::Entry, HashMap},
-};
+use std::collections::{hash_map::Entry, HashMap};
 
 impl Eval for Expr {
-    fn eval<'a>(&'a self, cxt: &mut Context<'a>) -> Result<Value, EvaluationError> {
+    fn eval(&self, cxt: &mut Context) -> Result<Value, EvaluationError> {
         match self {
             Expr::Mod(l, r) => Ok(Value::from(
                 l.eval(cxt)?.as_number() % r.eval(cxt)?.as_number(),
@@ -38,11 +35,7 @@ impl Eval for Expr {
                 let rvalue = r.eval(cxt)?;
                 Ok(Value::compare(op, &lvalue, &rvalue))
             },
-            Expr::Concat(l, r) => Ok(Value::String(Cow::from(format!(
-                "{}{}",
-                l.eval(cxt)?,
-                r.eval(cxt)?
-            )))),
+            Expr::Concat(l, r) => Ok(Value::String(format!("{}{}", l.eval(cxt)?, r.eval(cxt)?))),
             Expr::LogicalAnd(l, r) => {
                 if l.eval(cxt)?.as_bool() {
                     Ok(Value::from(r.eval(cxt)?.as_bool()))
@@ -72,10 +65,10 @@ impl Eval for Expr {
                         return Err(EvaluationError::NegativeFieldIndex(index));
                     }
                     if index == 0 {
-                        return Ok(Value::String(Cow::from(cxt.line)));
+                        return Ok(Value::String(cxt.line.to_owned()));
                     }
                     match cxt.fields.get(index as usize - 1) {
-                        Some(&field) => Ok(Value::String(Cow::from(field))),
+                        Some(field) => Ok(Value::String(field.to_owned())),
                         None => Ok(Value::Uninitialised),
                     }
                 },
@@ -85,7 +78,7 @@ impl Eval for Expr {
                     "NF" => Ok(Value::from(cxt.awk_vars.nf)),
                     "NR" => Ok(Value::from(cxt.awk_vars.nr)),
                     "SUBSEP" => Ok(Value::from(cxt.awk_vars.subsep.to_owned())),
-                    _ => match cxt.vars.entry(name) {
+                    _ => match cxt.vars.entry(name.to_owned()) {
                         Entry::Occupied(entry) => Ok(entry.get().clone()),
                         Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
                     },
@@ -98,7 +91,7 @@ impl Eval for Expr {
                         }
                         key_str.push_str(&expr.eval(cxt)?.as_string());
                     }
-                    match cxt.arrays.entry(name) {
+                    match cxt.arrays.entry(name.to_owned()) {
                         Entry::Occupied(mut entry) => match entry.get_mut().entry(key_str) {
                             Entry::Occupied(entry) => Ok(entry.get().clone()),
                             Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
@@ -118,21 +111,60 @@ impl Eval for Expr {
                     LValueType::Name(name) => match ty {
                         AssignType::Normal => {
                             let ret = Ok(new_value.clone());
-                            cxt.vars.insert(name, new_value);
+                            cxt.vars.insert(name.to_owned(), new_value);
                             ret
                         },
-                        _ => match cxt.vars.entry(name) {
+                        _ => match cxt.vars.entry(name.to_owned()) {
                             Entry::Occupied(mut entry) => {
-                                let result = Value::compute(ty, entry.get(), &new_value)?;
+                                let result =
+                                    Value::from(Value::compute(ty, entry.get(), &new_value)?);
                                 entry.insert(result.clone());
                                 Ok(result)
                             },
                             Entry::Vacant(entry) => {
-                                let result = Value::compute(ty, &Value::Uninitialised, &new_value)?;
+                                let result = Value::from(Value::compute(
+                                    ty,
+                                    &Value::Uninitialised,
+                                    &new_value,
+                                )?);
                                 entry.insert(result.clone());
                                 Ok(result)
                             },
                         },
+                    },
+                    LValueType::Dollar(e) => {
+                        let index = e.eval(cxt)?.as_number() as isize;
+                        if index < 0 {
+                            return Err(EvaluationError::NegativeFieldIndex(index));
+                        }
+                        let index = index as usize;
+                        match ty {
+                            AssignType::Normal => {
+                                let new_value_str = new_value.as_string();
+                                let ret = Ok(Value::from(new_value_str.to_owned()));
+                                if index == 0 {
+                                    cxt.update_line(new_value_str);
+                                } else {
+                                    cxt.update_field(index - 1, |_| Ok(new_value_str.to_owned()))?;
+                                }
+                                ret
+                            },
+                            _ => {
+                                cxt.update_field(index - 1, |old_field| {
+                                    let result = if let Some(old_field) = old_field {
+                                        Value::compute(
+                                            ty,
+                                            &Value::from(old_field.to_owned()),
+                                            &new_value,
+                                        )?
+                                    } else {
+                                        Value::compute(ty, &Value::Uninitialised, &new_value)?
+                                    };
+                                    Ok(result.to_string())
+                                })?;
+                                Ok(Value::from(cxt.fields.get(index - 1).unwrap().to_owned()))
+                            },
+                        }
                     },
                     _ => unimplemented!(),
                 }
@@ -141,7 +173,7 @@ impl Eval for Expr {
             Expr::UnaryPlus(up) => up.eval(cxt),
             Expr::Grouping(g) => g.eval(cxt),
             Expr::Number(n) => Ok(Value::from(*n)),
-            Expr::String(s) => Ok(Value::String(Cow::from(s))),
+            Expr::String(s) => Ok(Value::String(s.to_owned())),
             _ => unimplemented!(),
         }
     }
@@ -325,7 +357,7 @@ mod tests {
     fn field_lvalue() {
         let mut cxt = Context::new();
 
-        cxt.set_line("john connor");
+        cxt.set_next_line("john connor".to_owned());
 
         let expr = parse_expr_str("$0");
         let res = expr.eval(&mut cxt);
@@ -360,7 +392,7 @@ mod tests {
     fn var_lvalue() {
         let mut cxt = Context::new();
 
-        cxt.set_next_line("john connor");
+        cxt.set_next_line("john connor".to_owned());
 
         let expr = parse_expr_str("NF");
         let res = expr.eval(&mut cxt);
@@ -455,5 +487,81 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(0));
         assert_eq!(cxt.vars.get("c"), Some(&Value::from(0)));
+    }
+
+    #[test]
+    fn assignment_dollar_lvalue() {
+        let mut cxt = Context::new();
+
+        cxt.set_next_line("john connor".to_owned());
+
+        let expr = parse_expr_str("$0 = 42");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("42".to_owned()));
+        assert_eq!(cxt.line, "42".to_owned());
+        assert_eq!(cxt.fields, vec!["42".to_owned()]);
+        assert_eq!(cxt.awk_vars.nf, 1);
+
+        cxt.set_next_line("john connor".to_owned());
+
+        let expr = parse_expr_str(r#"$2 = "moo""#);
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("moo".to_owned()));
+        assert_eq!(cxt.line, "john moo".to_owned());
+        assert_eq!(cxt.fields, vec!["john".to_owned(), "moo".to_owned()]);
+        assert_eq!(cxt.awk_vars.nf, 2);
+
+        cxt.set_next_line("john connor".to_owned());
+
+        let expr = parse_expr_str(r#"$10 = "moo""#);
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("moo".to_owned()));
+        assert_eq!(cxt.line, "john connor        moo".to_owned());
+        assert_eq!(
+            cxt.fields,
+            vec![
+                "john".to_owned(),
+                "connor".to_owned(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                "moo".to_owned(),
+            ]
+        );
+        assert_eq!(cxt.awk_vars.nf, 10);
+
+        cxt.set_next_line("there are 5 apples".to_owned());
+
+        let expr = parse_expr_str("$3 *= 2");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("10".to_owned()));
+        assert_eq!(cxt.line, "there are 10 apples".to_owned());
+        assert_eq!(cxt.awk_vars.nf, 4);
+
+        cxt.set_next_line("there are 5 apples".to_owned());
+
+        let expr = parse_expr_str("$3 /= 2");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("2.5".to_owned()));
+        assert_eq!(cxt.line, "there are 2.5 apples".to_owned());
+        assert_eq!(cxt.awk_vars.nf, 4);
+
+        cxt.set_next_line("aaa bbb ccc".to_owned());
+
+        let expr = parse_expr_str("$2 = $3 = 2");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("2".to_owned()));
+        assert_eq!(cxt.line, "aaa 2 2".to_owned());
+        assert_eq!(cxt.awk_vars.nf, 3);
+
+        cxt.set_next_line("there are 5 apples".to_owned());
+
+        let expr = parse_expr_str("$3 /= 0");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
     }
 }
