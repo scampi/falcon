@@ -65,7 +65,7 @@ impl Eval for Expr {
                         return Err(EvaluationError::NegativeFieldIndex(index));
                     }
                     if index == 0 {
-                        return Ok(Value::String(cxt.line.to_owned()));
+                        return Ok(Value::String(cxt.record.to_owned()));
                     }
                     match cxt.fields.get(index as usize - 1) {
                         Some(field) => Ok(Value::String(field.to_owned())),
@@ -152,7 +152,7 @@ impl Eval for Expr {
                                 let new_value_str = new_value.as_string();
                                 let ret = Ok(Value::from(new_value_str.to_owned()));
                                 if index == 0 {
-                                    cxt.update_line(new_value_str);
+                                    cxt.update_record(new_value_str);
                                 } else {
                                     cxt.update_field(index - 1, |_| Ok(new_value_str.to_owned()))?;
                                 }
@@ -366,7 +366,7 @@ mod tests {
     fn field_lvalue() {
         let mut cxt = Context::new();
 
-        cxt.set_next_line("john connor".to_owned());
+        cxt.set_next_record("john connor".to_owned());
 
         let expr = parse_expr_str("$0");
         let res = expr.eval(&mut cxt);
@@ -401,7 +401,7 @@ mod tests {
     fn var_lvalue() {
         let mut cxt = Context::new();
 
-        cxt.set_next_line("john connor".to_owned());
+        cxt.set_next_record("john connor".to_owned());
 
         let expr = parse_expr_str("NF");
         let res = expr.eval(&mut cxt);
@@ -512,30 +512,30 @@ mod tests {
     fn assignment_dollar_lvalue() {
         let mut cxt = Context::new();
 
-        cxt.set_next_line("john connor".to_owned());
+        cxt.set_next_record("john connor".to_owned());
 
         let expr = parse_expr_str("$0 = 42");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("42".to_owned()));
-        assert_eq!(cxt.line, "42".to_owned());
+        assert_eq!(cxt.record, "42".to_owned());
         assert_eq!(cxt.fields, vec!["42".to_owned()]);
         assert_eq!(cxt.awk_vars.nf, 1);
 
-        cxt.set_next_line("john connor".to_owned());
+        cxt.set_next_record("john connor".to_owned());
 
         let expr = parse_expr_str(r#"$2 = "moo""#);
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("moo".to_owned()));
-        assert_eq!(cxt.line, "john moo".to_owned());
+        assert_eq!(cxt.record, "john moo".to_owned());
         assert_eq!(cxt.fields, vec!["john".to_owned(), "moo".to_owned()]);
         assert_eq!(cxt.awk_vars.nf, 2);
 
-        cxt.set_next_line("john connor".to_owned());
+        cxt.set_next_record("john connor".to_owned());
 
         let expr = parse_expr_str(r#"$10 = "moo""#);
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("moo".to_owned()));
-        assert_eq!(cxt.line, "john connor        moo".to_owned());
+        assert_eq!(cxt.record, "john connor        moo".to_owned());
         assert_eq!(
             cxt.fields,
             vec![
@@ -553,34 +553,46 @@ mod tests {
         );
         assert_eq!(cxt.awk_vars.nf, 10);
 
-        cxt.set_next_line("there are 5 apples".to_owned());
+        cxt.set_next_record("there are 5 apples".to_owned());
 
         let expr = parse_expr_str("$3 *= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("10".to_owned()));
-        assert_eq!(cxt.line, "there are 10 apples".to_owned());
+        assert_eq!(cxt.record, "there are 10 apples".to_owned());
         assert_eq!(cxt.awk_vars.nf, 4);
 
-        cxt.set_next_line("there are 5 apples".to_owned());
+        cxt.set_next_record("there are 5 apples".to_owned());
 
         let expr = parse_expr_str("$3 /= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("2.5".to_owned()));
-        assert_eq!(cxt.line, "there are 2.5 apples".to_owned());
+        assert_eq!(cxt.record, "there are 2.5 apples".to_owned());
         assert_eq!(cxt.awk_vars.nf, 4);
 
-        cxt.set_next_line("aaa bbb ccc".to_owned());
+        cxt.set_next_record("aaa bbb ccc".to_owned());
 
         let expr = parse_expr_str("$2 = $3 = 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("2".to_owned()));
-        assert_eq!(cxt.line, "aaa 2 2".to_owned());
+        assert_eq!(cxt.record, "aaa 2 2".to_owned());
         assert_eq!(cxt.awk_vars.nf, 3);
 
-        cxt.set_next_line("there are 5 apples".to_owned());
+        cxt.set_next_record("there are 5 apples".to_owned());
 
         let expr = parse_expr_str("$3 /= 0");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
+    }
+
+    #[test]
+    fn record_count() {
+        let mut cxt = Context::new();
+
+        cxt.set_next_record("john connor".to_owned());
+        assert_eq!(cxt.awk_vars.nr, 1);
+        assert_eq!(cxt.awk_vars.fnr, 1);
+        cxt.set_next_record("john connor".to_owned());
+        assert_eq!(cxt.awk_vars.nr, 2);
+        assert_eq!(cxt.awk_vars.fnr, 2);
     }
 }

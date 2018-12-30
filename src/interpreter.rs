@@ -71,7 +71,7 @@ struct Context {
     awk_vars: AwkVariables,
     vars: HashMap<String, Value>,
     arrays: HashMap<String, HashMap<String, Value>>,
-    line: String,
+    record: String,
     fields: Vec<String>,
 }
 
@@ -81,22 +81,22 @@ impl Context {
             awk_vars: AwkVariables::new(),
             vars: HashMap::new(),
             arrays: HashMap::new(),
-            line: String::new(),
+            record: String::new(),
             fields: Vec::new(),
         }
     }
 
-    fn set_next_line(&mut self, line: String) {
-        self.update_line(line);
-        // update line numbers
+    fn set_next_record(&mut self, record: String) {
+        self.update_record(record);
+        // update record numbers
         self.awk_vars.fnr += 1;
         self.awk_vars.nr += 1;
     }
 
-    fn update_line(&mut self, line: String) {
-        self.line = line;
+    fn update_record(&mut self, record: String) {
+        self.record = record;
         self.fields = self
-            .line
+            .record
             .split(&self.awk_vars.fs)
             .map(|s| s.to_owned())
             .collect();
@@ -116,7 +116,7 @@ impl Context {
                 self.fields.push(field(None)?);
             },
         }
-        self.line = self.fields.join(&self.awk_vars.fs);
+        self.record = self.fields.join(&self.awk_vars.fs);
         self.awk_vars.nf = self.fields.len();
         Ok(())
     }
