@@ -1,6 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    parser::expr::{AssignType, CmpOperator},
+    parser::expr::{AssignType, CmpOperator, ExprList},
 };
 use std::{collections::HashMap, fmt};
 
@@ -119,6 +119,17 @@ impl Context {
         self.record = self.fields.join(&self.awk_vars.fs);
         self.awk_vars.nf = self.fields.len();
         Ok(())
+    }
+
+    fn array_key(&mut self, path: &ExprList) -> Result<String, EvaluationError> {
+        let mut key_str = String::new();
+        for expr in &path.0 {
+            if !key_str.is_empty() {
+                key_str.push_str(&self.awk_vars.subsep);
+            }
+            key_str.push_str(&expr.eval(self)?.as_string());
+        }
+        Ok(key_str)
     }
 }
 
@@ -242,7 +253,7 @@ impl Value {
             },
             AssignType::Add => a.as_number() + b.as_number(),
             AssignType::Sub => a.as_number() - b.as_number(),
-            _ => unreachable!(),
+            AssignType::Normal => unreachable!(),
         };
         Ok(result)
     }

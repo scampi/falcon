@@ -80,13 +80,7 @@ impl Eval for Expr {
                     },
                 },
                 LValueType::Brackets(name, key) => {
-                    let mut key_str = String::new();
-                    for expr in &key.0 {
-                        if !key_str.is_empty() {
-                            key_str.push_str(&cxt.awk_vars.subsep);
-                        }
-                        key_str.push_str(&expr.eval(cxt)?.as_string());
-                    }
+                    let key_str = cxt.array_key(key)?;
                     match cxt.arrays.entry(name.to_owned()) {
                         Entry::Occupied(mut entry) => match entry.get_mut().entry(key_str) {
                             Entry::Occupied(entry) => Ok(entry.get().clone()),
@@ -175,7 +169,45 @@ impl Eval for Expr {
                             },
                         }
                     },
-                    _ => unimplemented!(),
+                    LValueType::Brackets(name, key) => {
+                        let key_str = cxt.array_key(key)?;
+                        if let AssignType::Normal = ty {
+                            let ret = Ok(new_value.clone());
+                            match cxt.arrays.entry(name.to_owned()) {
+                                Entry::Occupied(mut entry) => {
+                                    entry.get_mut().insert(key_str, new_value);
+                                },
+                                Entry::Vacant(entry) => {
+                                    let mut array = HashMap::new();
+                                    array.insert(key_str, new_value);
+                                    entry.insert(array);
+                                },
+                            }
+                            return ret;
+                        }
+                        match cxt.arrays.entry(name.to_owned()) {
+                            Entry::Occupied(mut entry) => match entry.get_mut().entry(key_str) {
+                                Entry::Occupied(mut entry) => {
+                                    let result = Value::compute(ty, entry.get(), &new_value)?;
+                                    entry.insert(Value::from(result));
+                                    Ok(Value::from(result))
+                                },
+                                Entry::Vacant(entry) => {
+                                    let result =
+                                        Value::compute(ty, &Value::Uninitialised, &new_value)?;
+                                    entry.insert(Value::from(result));
+                                    Ok(Value::from(result))
+                                },
+                            },
+                            Entry::Vacant(entry) => {
+                                let mut array = HashMap::new();
+                                let result = Value::compute(ty, &Value::Uninitialised, &new_value)?;
+                                array.insert(key_str, Value::from(result));
+                                entry.insert(array);
+                                Ok(Value::from(result))
+                            },
+                        }
+                    },
                 }
             },
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
@@ -582,6 +614,39 @@ mod tests {
         let expr = parse_expr_str("$3 /= 0");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
+    }
+
+    #[test]
+    fn assignment_brackets_lvalue() {
+        let mut cxt = Context::new();
+
+        let expr = parse_expr_str("a[0] = 42");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(42));
+        assert_eq!(
+            *cxt.arrays.get("a").unwrap().get("0").unwrap(),
+            Value::from(42)
+        );
+
+        let expr = parse_expr_str("a[0] /= 2");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(21));
+        assert_eq!(
+            *cxt.arrays.get("a").unwrap().get("0").unwrap(),
+            Value::from(21)
+        );
+
+        let expr = parse_expr_str("a[1] = 5");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(5));
+        assert_eq!(
+            *cxt.arrays.get("a").unwrap().get("1").unwrap(),
+            Value::from(5)
+        );
+        assert_eq!(
+            *cxt.arrays.get("a").unwrap().get("0").unwrap(),
+            Value::from(21)
+        );
     }
 
     #[test]
