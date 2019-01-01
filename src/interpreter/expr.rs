@@ -1,9 +1,9 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{Context, Eval, Value},
-    parser::expr::{AssignType, Expr, LValueType},
+    interpreter::{Context, Eval, value::Value},
+    interpreter::arrays::Arrays,
+    parser::expr::{Expr, LValueType},
 };
-use std::collections::{hash_map::Entry, HashMap};
 
 impl Eval for Expr {
     fn eval(&self, cxt: &mut Context) -> Result<Value, EvaluationError> {
@@ -59,154 +59,27 @@ impl Eval for Expr {
                 }
             },
             Expr::LValue(lvalue) => match lvalue {
+                LValueType::Name(name) => Ok(cxt.vars.get(name)),
                 LValueType::Dollar(e) => {
                     let index = e.eval(cxt)?.as_number() as isize;
-                    if index < 0 {
-                        return Err(EvaluationError::NegativeFieldIndex(index));
-                    }
-                    if index == 0 {
-                        return Ok(Value::String(cxt.record.to_owned()));
-                    }
-                    match cxt.fields.get(index as usize - 1) {
-                        Some(field) => Ok(Value::String(field.to_owned())),
-                        None => Ok(Value::Uninitialised),
-                    }
-                },
-                LValueType::Name(name) => match cxt.awk_vars.get(&name) {
-                    Some(value) => Ok(value),
-                    None => match cxt.vars.entry(name.to_owned()) {
-                        Entry::Occupied(entry) => Ok(entry.get().clone()),
-                        Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
-                    },
+                    cxt.record.get(index)
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = cxt.array_key(key)?;
-                    match cxt.arrays.entry(name.to_owned()) {
-                        Entry::Occupied(mut entry) => match entry.get_mut().entry(key_str) {
-                            Entry::Occupied(entry) => Ok(entry.get().clone()),
-                            Entry::Vacant(entry) => Ok(entry.insert(Value::Uninitialised).clone()),
-                        },
-                        Entry::Vacant(entry) => {
-                            let mut value = HashMap::new();
-                            value.insert(key_str, Value::Uninitialised);
-                            entry.insert(value);
-                            Ok(Value::Uninitialised)
-                        },
-                    }
-                },
+                    let key_str = Arrays::array_key(cxt, key)?;
+                    cxt.arrays.get(name, key_str)
+                }
             },
             Expr::Assign(ty, lvalue, rvalue) => {
                 let new_value = rvalue.eval(cxt)?;
                 match lvalue {
-                    LValueType::Name(name) => match ty {
-                        AssignType::Normal => {
-                            let ret = Ok(new_value.clone());
-                            if !cxt.awk_vars.set(name, &new_value) {
-                                cxt.vars.insert(name.to_owned(), new_value);
-                            }
-                            ret
-                        },
-                        _ => {
-                            if let Some(value) = cxt.awk_vars.get(name) {
-                                let result = Value::from(Value::compute(
-                                    ty,
-                                    &Value::from(value),
-                                    &new_value,
-                                )?);
-                                cxt.awk_vars.set(name, &result);
-                                return Ok(result);
-                            }
-                            match cxt.vars.entry(name.to_owned()) {
-                                Entry::Occupied(mut entry) => {
-                                    let result =
-                                        Value::from(Value::compute(ty, entry.get(), &new_value)?);
-                                    entry.insert(result.clone());
-                                    Ok(result)
-                                },
-                                Entry::Vacant(entry) => {
-                                    let result = Value::from(Value::compute(
-                                        ty,
-                                        &Value::Uninitialised,
-                                        &new_value,
-                                    )?);
-                                    entry.insert(result.clone());
-                                    Ok(result)
-                                },
-                            }
-                        },
-                    },
+                    LValueType::Name(name) => cxt.vars.set(ty, name, new_value),
                     LValueType::Dollar(e) => {
                         let index = e.eval(cxt)?.as_number() as isize;
-                        if index < 0 {
-                            return Err(EvaluationError::NegativeFieldIndex(index));
-                        }
-                        let index = index as usize;
-                        match ty {
-                            AssignType::Normal => {
-                                let new_value_str = new_value.as_string();
-                                let ret = Ok(Value::from(new_value_str.to_owned()));
-                                if index == 0 {
-                                    cxt.update_record(new_value_str);
-                                } else {
-                                    cxt.update_field(index - 1, |_| Ok(new_value_str.to_owned()))?;
-                                }
-                                ret
-                            },
-                            _ => {
-                                cxt.update_field(index - 1, |old_field| {
-                                    let result = if let Some(old_field) = old_field {
-                                        Value::compute(
-                                            ty,
-                                            &Value::from(old_field.to_owned()),
-                                            &new_value,
-                                        )?
-                                    } else {
-                                        Value::compute(ty, &Value::Uninitialised, &new_value)?
-                                    };
-                                    Ok(result.to_string())
-                                })?;
-                                Ok(Value::from(cxt.fields.get(index - 1).unwrap().to_owned()))
-                            },
-                        }
+                        cxt.record.set(&mut cxt.vars, ty, index, new_value)
                     },
                     LValueType::Brackets(name, key) => {
-                        let key_str = cxt.array_key(key)?;
-                        if let AssignType::Normal = ty {
-                            let ret = Ok(new_value.clone());
-                            match cxt.arrays.entry(name.to_owned()) {
-                                Entry::Occupied(mut entry) => {
-                                    entry.get_mut().insert(key_str, new_value);
-                                },
-                                Entry::Vacant(entry) => {
-                                    let mut array = HashMap::new();
-                                    array.insert(key_str, new_value);
-                                    entry.insert(array);
-                                },
-                            }
-                            return ret;
-                        }
-                        match cxt.arrays.entry(name.to_owned()) {
-                            Entry::Occupied(mut entry) => match entry.get_mut().entry(key_str) {
-                                Entry::Occupied(mut entry) => {
-                                    let result = Value::compute(ty, entry.get(), &new_value)?;
-                                    entry.insert(Value::from(result));
-                                    Ok(Value::from(result))
-                                },
-                                Entry::Vacant(entry) => {
-                                    let result =
-                                        Value::compute(ty, &Value::Uninitialised, &new_value)?;
-                                    entry.insert(Value::from(result));
-                                    Ok(Value::from(result))
-                                },
-                            },
-                            Entry::Vacant(entry) => {
-                                let mut array = HashMap::new();
-                                let result = Value::compute(ty, &Value::Uninitialised, &new_value)?;
-                                array.insert(key_str, Value::from(result));
-                                entry.insert(array);
-                                Ok(Value::from(result))
-                            },
-                        }
+                        let key_str = Arrays::array_key(cxt, key)?;
+                        cxt.arrays.set(ty, name, key_str, new_value)
                     },
                 }
             },
@@ -438,12 +311,12 @@ mod tests {
         let expr = parse_expr_str("NF");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(2.0));
-        assert!(cxt.vars.is_empty());
+        assert!(!cxt.vars.has_user_vars());
 
         let expr = parse_expr_str("nf");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
-        assert_eq!(cxt.vars.get("nf"), Some(&Value::Uninitialised));
+        assert_eq!(cxt.vars.get("nf"), Value::Uninitialised);
     }
 
     #[test]
@@ -454,25 +327,25 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(
-            cxt.arrays.get("a").unwrap().get("0"),
-            Some(&Value::Uninitialised)
+            cxt.arrays.get("a", "0".to_owned()),
+            Ok(Value::Uninitialised)
         );
 
         let expr = parse_expr_str("b[0,1,2]");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(
-            cxt.arrays.get("b").unwrap().get("012"),
-            Some(&Value::Uninitialised)
+            cxt.arrays.get("b", "012".to_owned()),
+            Ok(Value::Uninitialised)
         );
 
-        cxt.awk_vars.subsep = String::from("#");
+        cxt.vars.subsep = String::from("#");
         let expr = parse_expr_str("b[0,1,2]");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(
-            cxt.arrays.get("b").unwrap().get("0#1#2"),
-            Some(&Value::Uninitialised)
+            cxt.arrays.get("b", "0#1#2".to_owned()),
+            Ok(Value::Uninitialised)
         );
     }
 
@@ -483,61 +356,61 @@ mod tests {
         let expr = parse_expr_str("a = 42");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(42));
-        assert_eq!(cxt.vars.get("a"), Some(&Value::from(42)));
+        assert_eq!(cxt.vars.get("a"), Value::from(42));
 
         let expr = parse_expr_str("a = b = 5");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(5));
-        assert_eq!(cxt.vars.get("a"), Some(&Value::from(5)));
-        assert_eq!(cxt.vars.get("b"), Some(&Value::from(5)));
+        assert_eq!(cxt.vars.get("a"), Value::from(5));
+        assert_eq!(cxt.vars.get("b"), Value::from(5));
 
         let expr = parse_expr_str("a ^= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(25));
-        assert_eq!(cxt.vars.get("a"), Some(&Value::from(25)));
+        assert_eq!(cxt.vars.get("a"), Value::from(25));
 
         let expr = parse_expr_str("a = 2 + 3");
         expr.eval(&mut cxt).unwrap();
         let expr = parse_expr_str("a *= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(10));
-        assert_eq!(cxt.vars.get("a"), Some(&Value::from(10)));
+        assert_eq!(cxt.vars.get("a"), Value::from(10));
 
         let expr = parse_expr_str("a = 2 + 3");
         expr.eval(&mut cxt).unwrap();
         let expr = parse_expr_str("a /= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(2.5));
-        assert_eq!(cxt.vars.get("a"), Some(&Value::from(2.5)));
+        assert_eq!(cxt.vars.get("a"), Value::from(2.5));
 
         let expr = parse_expr_str("a = 2 + 3");
         expr.eval(&mut cxt).unwrap();
         let expr = parse_expr_str("a -= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(3));
-        assert_eq!(cxt.vars.get("a"), Some(&Value::from(3)));
+        assert_eq!(cxt.vars.get("a"), Value::from(3));
 
         let expr = parse_expr_str("a = 2 + 3");
         expr.eval(&mut cxt).unwrap();
         let expr = parse_expr_str("a %= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(1));
-        assert_eq!(cxt.vars.get("a"), Some(&Value::from(1)));
+        assert_eq!(cxt.vars.get("a"), Value::from(1));
 
         let expr = parse_expr_str("c /= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(0));
-        assert_eq!(cxt.vars.get("c"), Some(&Value::from(0)));
+        assert_eq!(cxt.vars.get("c"), Value::from(0));
 
         let expr = parse_expr_str(r#"FS = "@""#);
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("@".to_owned()));
-        assert_eq!(cxt.awk_vars.fs, "@".to_owned());
+        assert_eq!(cxt.vars.fs, "@".to_owned());
 
         let expr = parse_expr_str(r#"FS *= 2"#);
         let res = expr.eval(&mut cxt);
-        assert_eq!(res.unwrap(), Value::from(0));
-        assert_eq!(cxt.awk_vars.fs, "0".to_owned());
+        assert_eq!(res.unwrap(), Value::from("0".to_owned()));
+        assert_eq!(cxt.vars.fs, "0".to_owned());
     }
 
     #[test]
@@ -549,65 +422,60 @@ mod tests {
         let expr = parse_expr_str("$0 = 42");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("42".to_owned()));
-        assert_eq!(cxt.record, "42".to_owned());
-        assert_eq!(cxt.fields, vec!["42".to_owned()]);
-        assert_eq!(cxt.awk_vars.nf, 1);
+        assert_eq!(cxt.record.get(0), Ok(Value::from("42".to_owned())));
+        assert_eq!(cxt.vars.nf, 1);
 
         cxt.set_next_record("john connor".to_owned());
 
         let expr = parse_expr_str(r#"$2 = "moo""#);
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("moo".to_owned()));
-        assert_eq!(cxt.record, "john moo".to_owned());
-        assert_eq!(cxt.fields, vec!["john".to_owned(), "moo".to_owned()]);
-        assert_eq!(cxt.awk_vars.nf, 2);
+        assert_eq!(cxt.record.get(0), Ok(Value::from("john moo".to_owned())));
+        assert_eq!(cxt.record.get(1), Ok(Value::from("john".to_owned())));
+        assert_eq!(cxt.record.get(2), Ok(Value::from("moo".to_owned())));
+        assert_eq!(cxt.vars.nf, 2);
 
         cxt.set_next_record("john connor".to_owned());
 
         let expr = parse_expr_str(r#"$10 = "moo""#);
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("moo".to_owned()));
-        assert_eq!(cxt.record, "john connor        moo".to_owned());
-        assert_eq!(
-            cxt.fields,
-            vec![
-                "john".to_owned(),
-                "connor".to_owned(),
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-                "moo".to_owned(),
-            ]
-        );
-        assert_eq!(cxt.awk_vars.nf, 10);
+        assert_eq!(cxt.record.get(0), Ok(Value::from("john connor        moo".to_owned())));
+        assert_eq!(cxt.record.get(1), Ok(Value::from("john".to_owned())));
+        assert_eq!(cxt.record.get(2), Ok(Value::from("connor".to_owned())));
+        assert_eq!(cxt.record.get(3), Ok(Value::from(String::new())));
+        assert_eq!(cxt.record.get(4), Ok(Value::from(String::new())));
+        assert_eq!(cxt.record.get(5), Ok(Value::from(String::new())));
+        assert_eq!(cxt.record.get(6), Ok(Value::from(String::new())));
+        assert_eq!(cxt.record.get(7), Ok(Value::from(String::new())));
+        assert_eq!(cxt.record.get(8), Ok(Value::from(String::new())));
+        assert_eq!(cxt.record.get(9), Ok(Value::from(String::new())));
+        assert_eq!(cxt.record.get(10), Ok(Value::from("moo".to_owned())));
+        assert_eq!(cxt.vars.nf, 10);
 
         cxt.set_next_record("there are 5 apples".to_owned());
 
         let expr = parse_expr_str("$3 *= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("10".to_owned()));
-        assert_eq!(cxt.record, "there are 10 apples".to_owned());
-        assert_eq!(cxt.awk_vars.nf, 4);
+        assert_eq!(cxt.record.get(0), Ok(Value::from("there are 10 apples".to_owned())));
+        assert_eq!(cxt.vars.nf, 4);
 
         cxt.set_next_record("there are 5 apples".to_owned());
 
         let expr = parse_expr_str("$3 /= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("2.5".to_owned()));
-        assert_eq!(cxt.record, "there are 2.5 apples".to_owned());
-        assert_eq!(cxt.awk_vars.nf, 4);
+        assert_eq!(cxt.record.get(0), Ok(Value::from("there are 2.5 apples".to_owned())));
+        assert_eq!(cxt.vars.nf, 4);
 
         cxt.set_next_record("aaa bbb ccc".to_owned());
 
         let expr = parse_expr_str("$2 = $3 = 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("2".to_owned()));
-        assert_eq!(cxt.record, "aaa 2 2".to_owned());
-        assert_eq!(cxt.awk_vars.nf, 3);
+        assert_eq!(cxt.record.get(0), Ok(Value::from("aaa 2 2".to_owned())));
+        assert_eq!(cxt.vars.nf, 3);
 
         cxt.set_next_record("there are 5 apples".to_owned());
 
@@ -624,28 +492,28 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(42));
         assert_eq!(
-            *cxt.arrays.get("a").unwrap().get("0").unwrap(),
-            Value::from(42)
+            cxt.arrays.get("a", "0".to_owned()),
+            Ok(Value::from(42))
         );
 
         let expr = parse_expr_str("a[0] /= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(21));
         assert_eq!(
-            *cxt.arrays.get("a").unwrap().get("0").unwrap(),
-            Value::from(21)
+            cxt.arrays.get("a", "0".to_owned()),
+            Ok(Value::from(21))
         );
 
         let expr = parse_expr_str("a[1] = 5");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(5));
         assert_eq!(
-            *cxt.arrays.get("a").unwrap().get("1").unwrap(),
-            Value::from(5)
+            cxt.arrays.get("a", "1".to_owned()),
+            Ok(Value::from(5))
         );
         assert_eq!(
-            *cxt.arrays.get("a").unwrap().get("0").unwrap(),
-            Value::from(21)
+            cxt.arrays.get("a", "0".to_owned()),
+            Ok(Value::from(21))
         );
     }
 
@@ -654,10 +522,10 @@ mod tests {
         let mut cxt = Context::new();
 
         cxt.set_next_record("john connor".to_owned());
-        assert_eq!(cxt.awk_vars.nr, 1);
-        assert_eq!(cxt.awk_vars.fnr, 1);
+        assert_eq!(cxt.vars.nr, 1);
+        assert_eq!(cxt.vars.fnr, 1);
         cxt.set_next_record("john connor".to_owned());
-        assert_eq!(cxt.awk_vars.nr, 2);
-        assert_eq!(cxt.awk_vars.fnr, 2);
+        assert_eq!(cxt.vars.nr, 2);
+        assert_eq!(cxt.vars.fnr, 2);
     }
 }
