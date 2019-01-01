@@ -1,7 +1,8 @@
-use crate::parser::expr::AssignType;
-use crate::interpreter::variables::Variables;
-use crate::errors::EvaluationError;
-use crate::interpreter::value::Value;
+use crate::{
+    errors::EvaluationError,
+    interpreter::{value::Value, variables::Variables},
+    parser::expr::AssignType,
+};
 
 #[derive(Debug)]
 pub struct Record {
@@ -19,11 +20,7 @@ impl Record {
 
     pub fn update_record(&mut self, vars: &mut Variables, record: String) {
         self.record = record;
-        self.fields = self
-            .record
-            .split(&vars.fs)
-            .map(|s| s.to_owned())
-            .collect();
+        self.fields = self.record.split(&vars.fs).map(|s| s.to_owned()).collect();
         vars.nf = self.fields.len();
     }
 
@@ -40,7 +37,13 @@ impl Record {
         }
     }
 
-    pub fn set(&mut self, vars: &mut Variables, ty: &AssignType, index: isize, value: Value) -> Result<Value, EvaluationError> {
+    pub fn set(
+        &mut self,
+        vars: &mut Variables,
+        ty: &AssignType,
+        index: isize,
+        value: Value,
+    ) -> Result<Value, EvaluationError> {
         if index < 0 {
             return Err(EvaluationError::NegativeFieldIndex(index));
         }
@@ -53,14 +56,13 @@ impl Record {
         } else {
             let index = index - 1;
             match self.fields.get_mut(index) {
-                Some(f) => {
-                    *f = Value::compute(ty, Value::from(f.to_string()), value)?.as_string()
-                },
+                Some(f) => *f = Value::compute(ty, Value::from(f.to_string()), value)?.as_string(),
                 None => {
                     for _ in 0..index - self.fields.len() {
                         self.fields.push(String::new());
                     }
-                    self.fields.push(Value::compute(ty, Value::Uninitialised, value)?.as_string());
+                    self.fields
+                        .push(Value::compute(ty, Value::Uninitialised, value)?.as_string());
                 },
             };
             self.record = self.fields.join(&vars.fs);

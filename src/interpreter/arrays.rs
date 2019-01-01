@@ -2,7 +2,7 @@ use std::collections::{hash_map::Entry, HashMap};
 
 use crate::{
     errors::EvaluationError,
-    interpreter::{Context, Eval, value::Value},
+    interpreter::{value::Value, Context, Eval},
     parser::expr::{AssignType, ExprList},
 };
 

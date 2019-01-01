@@ -1,7 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{Context, Eval, value::Value},
-    interpreter::arrays::Arrays,
+    interpreter::{arrays::Arrays, value::Value, Context, Eval},
     parser::expr::{Expr, LValueType},
 };
 
@@ -67,7 +66,7 @@ impl Eval for Expr {
                 LValueType::Brackets(name, key) => {
                     let key_str = Arrays::array_key(cxt, key)?;
                     cxt.arrays.get(name, key_str)
-                }
+                },
             },
             Expr::Assign(ty, lvalue, rvalue) => {
                 let new_value = rvalue.eval(cxt)?;
@@ -440,7 +439,10 @@ mod tests {
         let expr = parse_expr_str(r#"$10 = "moo""#);
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("moo".to_owned()));
-        assert_eq!(cxt.record.get(0), Ok(Value::from("john connor        moo".to_owned())));
+        assert_eq!(
+            cxt.record.get(0),
+            Ok(Value::from("john connor        moo".to_owned()))
+        );
         assert_eq!(cxt.record.get(1), Ok(Value::from("john".to_owned())));
         assert_eq!(cxt.record.get(2), Ok(Value::from("connor".to_owned())));
         assert_eq!(cxt.record.get(3), Ok(Value::from(String::new())));
@@ -458,7 +460,10 @@ mod tests {
         let expr = parse_expr_str("$3 *= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("10".to_owned()));
-        assert_eq!(cxt.record.get(0), Ok(Value::from("there are 10 apples".to_owned())));
+        assert_eq!(
+            cxt.record.get(0),
+            Ok(Value::from("there are 10 apples".to_owned()))
+        );
         assert_eq!(cxt.vars.nf, 4);
 
         cxt.set_next_record("there are 5 apples".to_owned());
@@ -466,7 +471,10 @@ mod tests {
         let expr = parse_expr_str("$3 /= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("2.5".to_owned()));
-        assert_eq!(cxt.record.get(0), Ok(Value::from("there are 2.5 apples".to_owned())));
+        assert_eq!(
+            cxt.record.get(0),
+            Ok(Value::from("there are 2.5 apples".to_owned()))
+        );
         assert_eq!(cxt.vars.nf, 4);
 
         cxt.set_next_record("aaa bbb ccc".to_owned());
@@ -491,30 +499,18 @@ mod tests {
         let expr = parse_expr_str("a[0] = 42");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(42));
-        assert_eq!(
-            cxt.arrays.get("a", "0".to_owned()),
-            Ok(Value::from(42))
-        );
+        assert_eq!(cxt.arrays.get("a", "0".to_owned()), Ok(Value::from(42)));
 
         let expr = parse_expr_str("a[0] /= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(21));
-        assert_eq!(
-            cxt.arrays.get("a", "0".to_owned()),
-            Ok(Value::from(21))
-        );
+        assert_eq!(cxt.arrays.get("a", "0".to_owned()), Ok(Value::from(21)));
 
         let expr = parse_expr_str("a[1] = 5");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(5));
-        assert_eq!(
-            cxt.arrays.get("a", "1".to_owned()),
-            Ok(Value::from(5))
-        );
-        assert_eq!(
-            cxt.arrays.get("a", "0".to_owned()),
-            Ok(Value::from(21))
-        );
+        assert_eq!(cxt.arrays.get("a", "1".to_owned()), Ok(Value::from(5)));
+        assert_eq!(cxt.arrays.get("a", "0".to_owned()), Ok(Value::from(21)));
     }
 
     #[test]

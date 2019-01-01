@@ -1,10 +1,10 @@
 use crate::errors::EvaluationError;
 
-mod value;
-mod variables;
-mod record;
 mod arrays;
 mod expr;
+mod record;
+mod value;
+mod variables;
 
 pub struct Context {
     vars: variables::Variables,
