@@ -1,7 +1,7 @@
 use crate::{
     errors::EvaluationError,
     interpreter::{arrays::Arrays, value::Value, Context, Eval},
-    parser::expr::{Expr, LValueType},
+    parser::expr::{Expr, LValueType, AssignType},
 };
 
 impl Eval for Expr {
@@ -65,7 +65,7 @@ impl Eval for Expr {
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Arrays::array_key(cxt, key)?;
-                    cxt.arrays.get(name, key_str)
+                    cxt.arrays.get(name, &key_str)
                 },
             },
             Expr::Assign(ty, lvalue, rvalue) => {
@@ -79,6 +79,78 @@ impl Eval for Expr {
                     LValueType::Brackets(name, key) => {
                         let key_str = Arrays::array_key(cxt, key)?;
                         cxt.arrays.set(ty, name, key_str, new_value)
+                    },
+                }
+            },
+            Expr::PreIncrement(lvalue) => {
+                match lvalue {
+                    LValueType::Name(name) => {
+                        cxt.vars.set(&AssignType::Add, name, Value::from(1))
+                    },
+                    LValueType::Dollar(e) => {
+                        let index = e.eval(cxt)?.as_number() as isize;
+                        cxt.record.set(&mut cxt.vars, &AssignType::Add, index, Value::from(1))
+                    },
+                    LValueType::Brackets(name, key) => {
+                        let key_str = Arrays::array_key(cxt, key)?;
+                        cxt.arrays.set(&AssignType::Add, name, key_str, Value::from(1))
+                    },
+                }
+            },
+            Expr::PreDecrement(lvalue) => {
+                match lvalue {
+                    LValueType::Name(name) => {
+                        cxt.vars.set(&AssignType::Sub, name, Value::from(1))
+                    },
+                    LValueType::Dollar(e) => {
+                        let index = e.eval(cxt)?.as_number() as isize;
+                        cxt.record.set(&mut cxt.vars, &AssignType::Sub, index, Value::from(1))
+                    },
+                    LValueType::Brackets(name, key) => {
+                        let key_str = Arrays::array_key(cxt, key)?;
+                        cxt.arrays.set(&AssignType::Sub, name, key_str, Value::from(1))
+                    },
+                }
+            },
+            Expr::PostIncrement(lvalue) => {
+                match lvalue {
+                    LValueType::Name(name) => {
+                        let value = cxt.vars.get(name);
+                        cxt.vars.set(&AssignType::Add, name, Value::from(1))?;
+                        Ok(value)
+                    },
+                    LValueType::Dollar(e) => {
+                        let index = e.eval(cxt)?.as_number() as isize;
+                        let value = cxt.record.get(index);
+                        cxt.record.set(&mut cxt.vars, &AssignType::Add, index, Value::from(1))?;
+                        value
+                    },
+                    LValueType::Brackets(name, key) => {
+                        let key_str = Arrays::array_key(cxt, key)?;
+                        let value = cxt.arrays.get(name, &key_str);
+                        cxt.arrays.set(&AssignType::Add, name, key_str, Value::from(1))?;
+                        value
+                    },
+                }
+            },
+            Expr::PostDecrement(lvalue) => {
+                match lvalue {
+                    LValueType::Name(name) => {
+                        let value = cxt.vars.get(name);
+                        cxt.vars.set(&AssignType::Sub, name, Value::from(1))?;
+                        Ok(value)
+                    },
+                    LValueType::Dollar(e) => {
+                        let index = e.eval(cxt)?.as_number() as isize;
+                        let value = cxt.record.get(index);
+                        cxt.record.set(&mut cxt.vars, &AssignType::Sub, index, Value::from(1))?;
+                        value
+                    },
+                    LValueType::Brackets(name, key) => {
+                        let key_str = Arrays::array_key(cxt, key)?;
+                        let value = cxt.arrays.get(name, &key_str);
+                        cxt.arrays.set(&AssignType::Sub, name, key_str, Value::from(1))?;
+                        value
                     },
                 }
             },
@@ -326,7 +398,7 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(
-            cxt.arrays.get("a", "0".to_owned()),
+            cxt.arrays.get("a", "0"),
             Ok(Value::Uninitialised)
         );
 
@@ -334,7 +406,7 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(
-            cxt.arrays.get("b", "012".to_owned()),
+            cxt.arrays.get("b", "012"),
             Ok(Value::Uninitialised)
         );
 
@@ -343,7 +415,7 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
         assert_eq!(
-            cxt.arrays.get("b", "0#1#2".to_owned()),
+            cxt.arrays.get("b", "0#1#2"),
             Ok(Value::Uninitialised)
         );
     }
@@ -499,18 +571,18 @@ mod tests {
         let expr = parse_expr_str("a[0] = 42");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(42));
-        assert_eq!(cxt.arrays.get("a", "0".to_owned()), Ok(Value::from(42)));
+        assert_eq!(cxt.arrays.get("a", "0"), Ok(Value::from(42)));
 
         let expr = parse_expr_str("a[0] /= 2");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(21));
-        assert_eq!(cxt.arrays.get("a", "0".to_owned()), Ok(Value::from(21)));
+        assert_eq!(cxt.arrays.get("a", "0"), Ok(Value::from(21)));
 
         let expr = parse_expr_str("a[1] = 5");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(5));
-        assert_eq!(cxt.arrays.get("a", "1".to_owned()), Ok(Value::from(5)));
-        assert_eq!(cxt.arrays.get("a", "0".to_owned()), Ok(Value::from(21)));
+        assert_eq!(cxt.arrays.get("a", "1"), Ok(Value::from(5)));
+        assert_eq!(cxt.arrays.get("a", "0"), Ok(Value::from(21)));
     }
 
     #[test]
@@ -524,4 +596,97 @@ mod tests {
         assert_eq!(cxt.vars.nr, 2);
         assert_eq!(cxt.vars.fnr, 2);
     }
+
+    #[test]
+    fn preincrement() {
+        let mut cxt = Context::new();
+
+        // preincrement a variable
+        parse_expr_str("a = 15").eval(&mut cxt).unwrap();
+        let expr = parse_expr_str("++a");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(16));
+        assert_eq!(cxt.vars.get("a"), Value::from(16));
+        // preincrement an array element
+        let expr = parse_expr_str("++b[0]");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(1));
+        assert_eq!(cxt.arrays.get("b", "0"), Ok(Value::from(1)));
+        // preincrement a field value
+        cxt.set_next_record("10".to_owned());
+        let expr = parse_expr_str("++$1");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("11".to_owned()));
+        assert_eq!(cxt.record.get(1), Ok(Value::from("11".to_owned())));
+    }
+
+    #[test]
+    fn postincrement() {
+        let mut cxt = Context::new();
+
+        // postincrement a variable
+        parse_expr_str("a = 15").eval(&mut cxt).unwrap();
+        let expr = parse_expr_str("a++");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(15));
+        assert_eq!(cxt.vars.get("a"), Value::from(16));
+        // postincrement an array element
+        let expr = parse_expr_str("b[0]++");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::Uninitialised);
+        assert_eq!(cxt.arrays.get("b", "0"), Ok(Value::from(1)));
+        // postincrement a field value
+        cxt.set_next_record("10".to_owned());
+        let expr = parse_expr_str("$1++");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("10".to_owned()));
+        assert_eq!(cxt.record.get(1), Ok(Value::from("11".to_owned())));
+    }
+
+    #[test]
+    fn predecrement() {
+        let mut cxt = Context::new();
+
+        // preincrement a variable
+        parse_expr_str("a = 15").eval(&mut cxt).unwrap();
+        let expr = parse_expr_str("--a");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(14));
+        assert_eq!(cxt.vars.get("a"), Value::from(14));
+        // preincrement an array element
+        let expr = parse_expr_str("--b[0]");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(-1));
+        assert_eq!(cxt.arrays.get("b", "0"), Ok(Value::from(-1)));
+        // preincrement a field value
+        cxt.set_next_record("10".to_owned());
+        let expr = parse_expr_str("--$1");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("9".to_owned()));
+        assert_eq!(cxt.record.get(1), Ok(Value::from("9".to_owned())));
+    }
+
+    #[test]
+    fn postdecrement() {
+        let mut cxt = Context::new();
+
+        // postincrement a variable
+        parse_expr_str("a = 15").eval(&mut cxt).unwrap();
+        let expr = parse_expr_str("a--");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(15));
+        assert_eq!(cxt.vars.get("a"), Value::from(14));
+        // postincrement an array element
+        let expr = parse_expr_str("b[0]--");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::Uninitialised);
+        assert_eq!(cxt.arrays.get("b", "0"), Ok(Value::from(-1)));
+        // postincrement a field value
+        cxt.set_next_record("10".to_owned());
+        let expr = parse_expr_str("$1--");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from("10".to_owned()));
+        assert_eq!(cxt.record.get(1), Ok(Value::from("9".to_owned())));
+    }
+
 }

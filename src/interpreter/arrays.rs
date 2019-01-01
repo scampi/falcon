@@ -17,9 +17,9 @@ impl Arrays {
         }
     }
 
-    pub fn get(&self, name: &str, key: String) -> Result<Value, EvaluationError> {
+    pub fn get(&self, name: &str, key: &str) -> Result<Value, EvaluationError> {
         match self.arrays.get(name) {
-            Some(array) => match array.get(&key) {
+            Some(array) => match array.get(key) {
                 Some(value) => Ok(value.clone()),
                 None => Ok(Value::Uninitialised),
             },
