@@ -4,7 +4,7 @@ use crate::parser::util::{
 use combine::{
     error::{ParseError, StreamError},
     parser::{
-        char::{char, digit, spaces, string},
+        char::{char, digit, space, spaces, string},
         choice::{choice, optional},
         combinator::attempt,
         item::{one_of, satisfy, value},
@@ -289,9 +289,9 @@ parser! {
             }
         }
 
-        p.and(optional(many1::<Vec<Expr>, _>(attempt(
-            skip_wrapping_spaces(char('^')).with(leaf()),
-        ))))
+        p.and(optional(many1::<Vec<Expr>, _>(
+            attempt(skip_wrapping_spaces(char('^'))).with(leaf()),
+        )))
         .map(|(left_expr, pow_expr)| {
             if let Some(pow_expr) = pow_expr {
                 let mut it = pow_expr.into_iter().rev();
@@ -312,9 +312,9 @@ parser! {
         P: Parser<Input = I, Output = Expr> + 'a,
     ]
     {
-        p.and(optional(many1::<Vec<(char, Expr)>, _>(attempt(
-            skip_wrapping_spaces(one_of("*/%".chars())).and(parse_pow_expr(leaf())),
-        ))))
+        p.and(optional(many1::<Vec<(char, Expr)>, _>(
+            attempt(skip_wrapping_spaces(one_of("*/%".chars()))).and(parse_pow_expr(leaf())),
+        )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
                 rest.into_iter().fold(left_expr, |le, (op, re)| match op {
@@ -338,10 +338,10 @@ parser! {
         P: Parser<Input = I, Output = Expr> + 'a,
     ]
     {
-        p.and(optional(many1::<Vec<(char, Expr)>, _>(attempt(
-            skip_wrapping_spaces(one_of("+-".chars()))
+        p.and(optional(many1::<Vec<(char, Expr)>, _>(
+            attempt(skip_wrapping_spaces(one_of("+-".chars())))
                 .and(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
-        ))))
+        )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
                 rest.into_iter().fold(left_expr, |le, (op, re)| match op {
@@ -365,10 +365,8 @@ parser! {
     ]
     {
         p.and(optional(many1::<Vec<Expr>, _>(attempt(
-            parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(
-                skip_wrapping_spaces(leaf()),
-            ))),
-        ))))
+            space().with(parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))))),
+        )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
                 rest.into_iter()
@@ -423,7 +421,7 @@ parser! {
         P: Parser<Input = I, Output = Expr> + 'a,
     ]
     {
-        p.and(optional(many1::<Vec<(&str, Expr)>, _>(attempt(
+        p.and(optional(many1::<Vec<(&str, Expr)>, _>(
             choice((
                 attempt(skip_wrapping_spaces(string("!~"))),
                 attempt(skip_wrapping_spaces(string("~"))),
@@ -431,7 +429,7 @@ parser! {
             .and(parse_comparison_expr(parse_concat_expr(
                 parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
             ))),
-        ))))
+        )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
                 rest.into_iter().fold(left_expr, |le, (op, re)| match op {
@@ -454,10 +452,9 @@ parser! {
         P: Parser<Input = I, Output = Expr> + 'a,
     ]
     {
-        p.and(optional(attempt(
-            skip_wrapping_spaces(string("in"))
-            .with(parse_name())
-        )))
+        p.and(optional(
+            attempt(skip_wrapping_spaces(string("in"))).with(parse_name())
+        ))
         .map(|(left_expr, array_name)| {
             if let Some(array_name) = array_name {
                 Expr::Array(ExprList(vec![left_expr]), array_name)
@@ -476,12 +473,12 @@ parser! {
         P: Parser<Input = I, Output = Expr> + 'a,
     ]
     {
-        p.and(optional(many1::<Vec<Expr>, _>(attempt(
-            skip_wrapping_spaces(string("&&"))
+        p.and(optional(many1::<Vec<Expr>, _>(
+            attempt(skip_wrapping_spaces(string("&&")))
             .with(parse_array_expr(parse_match_expr(parse_comparison_expr(parse_concat_expr(
                 parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))))),
             )))
-        ))))
+        )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
                 rest.into_iter().fold(left_expr, |le, re|
@@ -505,13 +502,13 @@ parser! {
         P: Parser<Input = I, Output = Expr> + 'a,
     ]
     {
-        p.and(optional(many1::<Vec<Expr>, _>(attempt(
-            skip_wrapping_spaces(string("||")).with(parse_and_expr(parse_array_expr(
+        p.and(optional(many1::<Vec<Expr>, _>(
+            attempt(skip_wrapping_spaces(string("||"))).with(parse_and_expr(parse_array_expr(
                 parse_match_expr(parse_comparison_expr(parse_concat_expr(
                     parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
                 ))),
             ))),
-        ))))
+        )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
                 rest.into_iter().fold(left_expr, |le, re|
@@ -535,8 +532,8 @@ parser! {
         P: Parser<Input = I, Output = Expr> + 'a,
     ]
     {
-        p.and(optional(attempt(
-            skip_wrapping_spaces(char('?')).with(parse_or_expr(parse_and_expr(
+        p.and(optional(
+            attempt(skip_wrapping_spaces(char('?'))).with(parse_or_expr(parse_and_expr(
                 parse_array_expr(parse_match_expr(parse_comparison_expr(parse_concat_expr(
                     parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
                 ))))
@@ -547,7 +544,7 @@ parser! {
                         parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
                     ))))
                 ))))
-        ))))
+        )))
         .map(|(left_expr, rest)| {
             if let Some((ok, ko)) = rest {
                 Expr::Conditional(Box::new(left_expr), Box::new(ok), Box::new(ko))
@@ -566,7 +563,7 @@ parser! {
     ]
     {
         choice((
-            attempt(parse_string().map(|s: String| Expr::String(s))),
+            attempt(parse_string()).map(|s: String| Expr::String(s)),
             attempt(parse_regexp()).and_then(|ere: String| {
                 match Regex::new(&ere) {
                     Ok(ere) => Ok(Expr::Regexp(RegexEq(ere))),
@@ -578,38 +575,28 @@ parser! {
                 }
             }),
             attempt(parse_number()),
-            attempt(between(
-                skip_wrapping_spaces(char('(')),
+            between(
+                attempt(skip_wrapping_spaces(char('('))),
                 skip_wrapping_spaces(char(')')),
                 parse_expr(),
             )
-            .map(|expr| Expr::Grouping(Box::new(expr)))),
+            .map(|expr| Expr::Grouping(Box::new(expr))),
             attempt(parse_assignment()),
-            attempt(
-                skip_wrapping_spaces(string("++"))
+            attempt(skip_wrapping_spaces(string("++")))
                     .with(parse_lvalue())
                     .map(|lvalue| Expr::PreIncrement(lvalue)),
-            ),
-            attempt(
-                skip_wrapping_spaces(string("--"))
+            attempt(skip_wrapping_spaces(string("--")))
                     .with(parse_lvalue())
                     .map(|lvalue| Expr::PreDecrement(lvalue)),
-            ),
-            attempt(
-                skip_wrapping_spaces(char('+'))
+            attempt(skip_wrapping_spaces(char('+')))
                     .with(leaf())
-                    .map(|expr| Expr::UnaryPlus(Box::new(expr)))
-            ),
-            attempt(
-                skip_wrapping_spaces(char('-'))
+                    .map(|expr| Expr::UnaryPlus(Box::new(expr))),
+            attempt(skip_wrapping_spaces(char('-')))
                     .with(leaf())
-                    .map(|expr| Expr::UnaryMinus(Box::new(expr)))
-            ),
-            attempt(
-                skip_wrapping_spaces(char('!'))
+                    .map(|expr| Expr::UnaryMinus(Box::new(expr))),
+            attempt(skip_wrapping_spaces(char('!')))
                     .with(leaf())
                     .map(|expr| Expr::LogicalNot(Box::new(expr))),
-            ),
             attempt(
                 parse_lvalue()
                     .skip(skip_wrapping_spaces(string("++")))
@@ -631,7 +618,7 @@ parser! {
                 )
                 .map(|(func_name, args)| Expr::FunctionCall(func_name, args)),
             ),
-            parse_lvalue().map(|lvalue| Expr::LValue(lvalue)),
+            attempt(parse_lvalue()).map(|lvalue| Expr::LValue(lvalue)),
         ))
     }
 }
@@ -678,12 +665,9 @@ parser! {
                     ))
                     .map(|(name, exprs)| LValueType::Brackets(name, exprs))
             ),
-            attempt(
-                spaces()
-                    .skip(char('$'))
-                    .with(leaf())
-                    .map(|expr| LValueType::Dollar(Box::new(expr)))
-            ),
+            attempt(spaces().skip(char('$')))
+            .with(leaf())
+            .map(|expr| LValueType::Dollar(Box::new(expr))),
             attempt(parse_name().map(|name| LValueType::Name(name))),
         ))
     }
@@ -1831,15 +1815,17 @@ mod tests {
             ),
         );
 
-        //let input = r#"1 ? "ok" : /bad {/"#;
-        //let expr = parse_expr().easy_parse(State::new(input));
-        //assert!(expr.is_err(), "input: {}\n{:?}", input, expr.unwrap());
-        //println!("expr.unwrap_err() = [{}]", expr.unwrap_err());
+        let input = r#"1 ? "ok" : /bad {/"#;
+        let expr = parse_expr().easy_parse(State::new(input));
+        assert!(expr.is_err(), "input: {}\n{:?}", input, expr.unwrap());
+        let msg = format!("{}", expr.unwrap_err());
+        assert!(msg.contains("Invalid regex"));
 
-        //let input = r#"/bad {/"#;
-        //let expr = parse_expr().easy_parse(State::new(input));
-        //assert!(expr.is_err(), "input: {}\n{:?}", input, expr.unwrap());
-        //println!("expr.unwrap_err() = [{}]", expr.unwrap_err());
+        let input = r#"/bad {/"#;
+        let expr = parse_expr().easy_parse(State::new(input));
+        assert!(expr.is_err(), "input: {}\n{:?}", input, expr.unwrap());
+        let msg = format!("{}", expr.unwrap_err());
+        assert!(msg.contains("Invalid regex"));
     }
 
     #[test]
