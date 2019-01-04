@@ -1,3 +1,4 @@
+use crate::parser::ast::*;
 use crate::parser::util::{
     parse_func_name, parse_name, parse_regexp, parse_string, skip_wrapping_spaces,
 };
@@ -7,231 +8,22 @@ use combine::{
         char::{char, digit, space, spaces, string},
         choice::{choice, optional},
         combinator::attempt,
-        item::{one_of, satisfy, value},
-        range::{recognize, take_while1},
-        repeat::{escaped, many, many1, sep_by, sep_by1, take_until},
+        item::one_of,
+        repeat::{many1, sep_by, sep_by1},
         sequence::between,
         Parser,
     },
-    stream::{RangeStream, Stream, StreamErrorFor, StreamOnce},
-    *,
+    stream::{RangeStream, Stream, StreamErrorFor},
 };
 use regex::Regex;
-use std::fmt;
+
+// import macros
+use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
 
 // TODO:
 // - getline
 // - builtin without args
 // - array with the body as a group with comma-separated exprs
-
-#[derive(Debug)]
-pub struct RegexEq(Regex);
-
-impl PartialEq for RegexEq {
-    fn eq(&self, other: &RegexEq) -> bool {
-        self.0.as_str() == other.0.as_str()
-    }
-}
-
-impl fmt::Display for RegexEq {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl RegexEq {
-    #[cfg(test)]
-    fn new(reg: &str) -> RegexEq {
-        RegexEq(Regex::new(reg).unwrap())
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct ExprList(pub Vec<Expr>);
-
-impl fmt::Display for ExprList {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        for expr in &self.0 {
-            write!(formatter, "{}, ", expr)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Expr {
-    Grouping(Box<Expr>),
-    UnaryPlus(Box<Expr>),
-    UnaryMinus(Box<Expr>),
-    Pow(Box<Expr>, Box<Expr>),
-    Mul(Box<Expr>, Box<Expr>),
-    Div(Box<Expr>, Box<Expr>),
-    Mod(Box<Expr>, Box<Expr>),
-    Add(Box<Expr>, Box<Expr>),
-    Minus(Box<Expr>, Box<Expr>),
-    Concat(Box<Expr>, Box<Expr>),
-    Comparison(CmpOperator, Box<Expr>, Box<Expr>),
-    Match(Box<Expr>, Box<Expr>),
-    NonMatch(Box<Expr>, Box<Expr>),
-    Array(ExprList, String),
-    LogicalAnd(Box<Expr>, Box<Expr>),
-    LogicalOr(Box<Expr>, Box<Expr>),
-    LogicalNot(Box<Expr>),
-    Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
-    Number(f64),
-    String(String),
-    LValue(LValueType),
-    Regexp(RegexEq),
-    PreIncrement(LValueType),
-    PreDecrement(LValueType),
-    PostIncrement(LValueType),
-    PostDecrement(LValueType),
-    FunctionCall(String, ExprList),
-    Assign(AssignType, LValueType, Box<Expr>),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum CmpOperator {
-    LessThan,
-    LessThanOrEqual,
-    NotEqual,
-    Equal,
-    GreaterThan,
-    GreaterThanOrEqual,
-}
-
-impl CmpOperator {
-    pub fn compare<T: PartialOrd>(&self, avalue: &T, bvalue: &T) -> bool {
-        match self {
-            CmpOperator::LessThan => avalue < bvalue,
-            CmpOperator::LessThanOrEqual => avalue <= bvalue,
-            CmpOperator::NotEqual => avalue != bvalue,
-            CmpOperator::Equal => avalue == bvalue,
-            CmpOperator::GreaterThan => avalue > bvalue,
-            CmpOperator::GreaterThanOrEqual => avalue >= bvalue,
-        }
-    }
-}
-
-impl From<&str> for CmpOperator {
-    fn from(s: &str) -> Self {
-        match s {
-            "<" => CmpOperator::LessThan,
-            "<=" => CmpOperator::LessThanOrEqual,
-            "!=" => CmpOperator::NotEqual,
-            "==" => CmpOperator::Equal,
-            ">" => CmpOperator::GreaterThan,
-            ">=" => CmpOperator::GreaterThanOrEqual,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl fmt::Display for CmpOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            CmpOperator::LessThan => write!(f, "<"),
-            CmpOperator::LessThanOrEqual => write!(f, "<="),
-            CmpOperator::NotEqual => write!(f, "!="),
-            CmpOperator::Equal => write!(f, "=="),
-            CmpOperator::GreaterThan => write!(f, ">"),
-            CmpOperator::GreaterThanOrEqual => write!(f, ">="),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum LValueType {
-    Name(String),
-    Dollar(Box<Expr>),
-    Brackets(String, ExprList),
-}
-
-impl fmt::Display for LValueType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            LValueType::Name(name) => write!(f, "{}", name),
-            LValueType::Dollar(e) => write!(f, "{}", e),
-            LValueType::Brackets(name, exprs) => write!(f, "{}[{}]", name, exprs),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum AssignType {
-    Normal,
-    Pow,
-    Mod,
-    Mul,
-    Div,
-    Add,
-    Sub,
-}
-
-impl AssignType {
-    fn new(s: &str) -> Self {
-        match s {
-            "=" => AssignType::Normal,
-            "^=" => AssignType::Pow,
-            "%=" => AssignType::Mod,
-            "*=" => AssignType::Mul,
-            "/=" => AssignType::Div,
-            "+=" => AssignType::Add,
-            "-=" => AssignType::Sub,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl fmt::Display for AssignType {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            AssignType::Normal => write!(formatter, "="),
-            AssignType::Pow => write!(formatter, "^="),
-            AssignType::Mod => write!(formatter, "%="),
-            AssignType::Mul => write!(formatter, "*="),
-            AssignType::Div => write!(formatter, "/="),
-            AssignType::Add => write!(formatter, "+="),
-            AssignType::Sub => write!(formatter, "-="),
-        }
-    }
-}
-
-impl fmt::Display for Expr {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Expr::Grouping(e) => write!(formatter, "❨ {} ❩", e),
-            Expr::UnaryPlus(e) => write!(formatter, "+( {} )", e),
-            Expr::UnaryMinus(e) => write!(formatter, "-( {} )", e),
-            Expr::Pow(l, r) => write!(formatter, "( {} ) ^ ( {} )", l, r),
-            Expr::Mul(l, r) => write!(formatter, "( {} ) * ( {} )", l, r),
-            Expr::Div(l, r) => write!(formatter, "( {} ) / ( {} )", l, r),
-            Expr::Mod(l, r) => write!(formatter, "( {} ) % ( {} )", l, r),
-            Expr::Add(l, r) => write!(formatter, "( {} ) + ( {} )", l, r),
-            Expr::Minus(l, r) => write!(formatter, "( {} ) - ( {} )", l, r),
-            Expr::Concat(l, r) => write!(formatter, "( {} )   ( {} )", l, r),
-            Expr::Comparison(op, l, r) => write!(formatter, "( {} ) {} ( {} )", l, op, r),
-            Expr::Match(l, r) => write!(formatter, "( {} ) ~ ( {} )", l, r),
-            Expr::NonMatch(l, r) => write!(formatter, "( {} ) !~ ( {} )", l, r),
-            Expr::Array(exprs, name) => write!(formatter, "({}) in {}", exprs, name),
-            Expr::LogicalAnd(l, r) => write!(formatter, "( {} ) && ( {} )", l, r),
-            Expr::LogicalOr(l, r) => write!(formatter, "( {} ) || ( {} )", l, r),
-            Expr::LogicalNot(e) => write!(formatter, "!( {} )", e),
-            Expr::Conditional(c, t, f) => write!(formatter, "( {} ) ? ( {} ) : ( {} )", c, t, f),
-
-            Expr::Number(n) => write!(formatter, "{}", n),
-            Expr::String(s) => write!(formatter, r#" "{}" "#, s),
-            Expr::LValue(lvalue) => write!(formatter, "{}", lvalue),
-            Expr::Regexp(ere) => write!(formatter, " /{}/ ", ere),
-            Expr::PreIncrement(lvalue) => write!(formatter, " ++{} ", lvalue),
-            Expr::PreDecrement(lvalue) => write!(formatter, " --{} ", lvalue),
-            Expr::PostIncrement(lvalue) => write!(formatter, " {}++ ", lvalue),
-            Expr::PostDecrement(lvalue) => write!(formatter, " {}-- ", lvalue),
-            Expr::FunctionCall(fname, args) => write!(formatter, " {}({}) ", fname, args),
-            Expr::Assign(op, l, v) => write!(formatter, " {} {} {} ", l, op, v),
-        }
-    }
-}
 
 parser! {
     pub fn parse_expr['a, I]()(I) -> Expr
