@@ -1,341 +1,292 @@
-use nom::{types::CompleteStr, *};
+use crate::parser::{
+    ast::*,
+    expr::*,
+    util::{parse_func_name, parse_name, parse_regexp, parse_string, skip_wrapping_spaces},
+};
+use combine::{
+    error::{ParseError, StreamError},
+    parser::{
+        char::{char, digit, space, spaces, string},
+        choice::{choice, optional},
+        combinator::attempt,
+        item::one_of,
+        repeat::{many1, sep_by, sep_by1, sep_end_by},
+        sequence::between,
+        Parser,
+    },
+    stream::{RangeStream, Stream, StreamErrorFor},
+};
 use std::fmt;
 
-use crate::parser::{expr::*, util::parse_name};
+// import macros
+use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
 
-#[derive(Debug, PartialEq)]
-pub struct StmtList(pub Vec<Stmt>);
-
-impl fmt::Display for StmtList {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for stmt in &self.0 {
-            write!(f, "{}, ", stmt)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Stmt {
-    Block(StmtList),
-    IfElse(Expr, Box<Stmt>, Option<Box<Stmt>>),
-    While(Expr, Box<Stmt>),
-    DoWhile(Expr, Box<Stmt>),
-    For(
-        Option<Box<Stmt>>,
-        Option<Expr>,
-        Option<Box<Stmt>>,
-        Box<Stmt>,
-    ),
-    ForIn(String, String, Box<Stmt>),
-    Expr(Expr),
-    Break,
-    Continue,
-    Next,
-    Exit(Option<Expr>),
-    Return(Option<Expr>),
-    Delete(String, ExprList),
-    Print(ExprList, Option<OutputRedirection>),
-    Printf(ExprList, Option<OutputRedirection>),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum OutputRedirection {
-    Truncate(Expr),
-    Append(Expr),
-    Pipe(Expr),
-}
-
-impl fmt::Display for OutputRedirection {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            OutputRedirection::Truncate(e) => write!(f, "> {}", e),
-            OutputRedirection::Append(e) => write!(f, ">> {}", e),
-            OutputRedirection::Pipe(e) => write!(f, "| {}", e),
-        }
-    }
-}
-
-impl fmt::Display for Stmt {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Stmt::Print(exprs, None) => write!(f, "print({})", exprs),
-            Stmt::Printf(exprs, None) => write!(f, "printf({})", exprs),
-            Stmt::Print(exprs, Some(redir)) => write!(f, "print({}) {}", exprs, redir),
-            Stmt::Printf(exprs, Some(redir)) => write!(f, "printf({}) {}", exprs, redir),
-            Stmt::Block(stmts) => write!(f, "{{ {} }}", stmts),
-            Stmt::IfElse(cond, ok, ko) => {
-                write!(f, "if ({}) {}", cond, ok)?;
-                if let Some(ko) = ko {
-                    write!(f, " else {}", ko)?;
-                }
-                Ok(())
-            },
-            Stmt::For(start, until, next, body) => {
-                write!(f, "for (")?;
-                if let Some(start) = start {
-                    write!(f, "{}", start)?;
-                }
-                write!(f, ";")?;
-                if let Some(until) = until {
-                    write!(f, " {}", until)?;
-                }
-                write!(f, ";")?;
-                if let Some(next) = next {
-                    write!(f, " {}", next)?;
-                }
-                write!(f, ") {}", body)
-            },
-            Stmt::ForIn(a, b, body) => write!(f, "for ({} in {}) {}", a, b, body),
-            Stmt::While(cond, body) => write!(f, "while ({}) {}", cond, body),
-            Stmt::DoWhile(cond, body) => write!(f, "do {} while ({})", body, cond),
-            Stmt::Expr(e) => write!(f, "{}", e),
-            Stmt::Break => write!(f, "break"),
-            Stmt::Continue => write!(f, "continue"),
-            Stmt::Next => write!(f, "next"),
-            Stmt::Exit(e) => {
-                write!(f, "exit")?;
-                if let Some(e) = e {
-                    write!(f, "{}", e)?;
-                }
-                Ok(())
-            },
-            Stmt::Return(e) => {
-                write!(f, "return")?;
-                if let Some(e) = e {
-                    write!(f, "{}", e)?;
-                }
-                Ok(())
-            },
-            Stmt::Delete(name, exprs) => write!(f, "delete {}[{}]", name, exprs),
-        }
-    }
-}
-
-pub fn parse_stmt(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    alt!(
-        input,
-        parse_terminatable
-        | parse_if_else
-        | parse_while
-        | parse_do_while
-        | parse_for
-        | parse_for_in
-        | parse_stmt_list => { |stmts| Stmt::Block(stmts) }
-    )
-}
-
-#[rustfmt::skip]
-pub fn parse_stmt_list(input: CompleteStr) -> IResult<CompleteStr, StmtList> {
-    do_parse!(
-        input,
-        ws!(char!('{')) >>
-        stmts: separated_list!(ws!(char!(';')), parse_stmt) >>
-        // allow trailing semicolon
-        opt!(ws!(char!(';'))) >>
-        ws!(char!('}')) >>
-        (StmtList(stmts))
-    )
-}
-
-#[rustfmt::skip]
-fn parse_if_else(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    do_parse!(
-        input,
-        ws!(tag!("if")) >>
-        cond: delimited!(ws!(char!('(')), parse_expr, ws!(char!(')'))) >>
-        ok: parse_stmt >>
-        ko: opt!(do_parse!(
-                ws!(tag!("else")) >>
-                ko_content: parse_stmt >>
-                (Box::new(ko_content))
-        )) >>
-        (Stmt::IfElse(cond, Box::new(ok), ko))
-    )
-}
-
-#[rustfmt::skip]
-fn parse_while(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    do_parse!(
-        input,
-        ws!(tag!("while")) >>
-        cond: delimited!(ws!(char!('(')), parse_expr, ws!(char!(')'))) >>
-        body: parse_stmt >>
-        (Stmt::While(cond, Box::new(body)))
-    )
-}
-
-#[rustfmt::skip]
-fn parse_do_while(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    do_parse!(
-        input,
-        ws!(tag!("do")) >>
-        body: parse_stmt >>
-        ws!(tag!("while")) >>
-        cond: delimited!(ws!(char!('(')), parse_expr, ws!(char!(')'))) >>
-        (Stmt::DoWhile(cond, Box::new(body)))
-    )
-}
-
-#[rustfmt::skip]
-fn parse_for(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    do_parse!(
-        input,
-        ws!(tag!("for")) >>
-        ws!(char!('(')) >>
-        start: opt!(parse_simple_stmt) >>
-        ws!(char!(';')) >>
-        until: opt!(parse_expr) >>
-        ws!(char!(';')) >>
-        next: opt!(parse_simple_stmt) >>
-        ws!(char!(')')) >>
-        body: parse_stmt >>
-        (Stmt::For(
-            start.map(|s| Box::new(s)),
-            until,
-            next.map(|s| Box::new(s)),
-            Box::new(body)
+parser! {
+    fn parse_stmt['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        choice((
+            attempt(parse_terminatable()),
+            attempt(parse_if_else()),
+            attempt(parse_while()),
+            attempt(parse_do_while()),
+            attempt(parse_for()),
+            attempt(parse_for_in()),
+            attempt(parse_stmt_list().map(|stmts| Stmt::Block(stmts))),
         ))
-    )
+    }
 }
 
-#[rustfmt::skip]
-fn parse_for_in(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    do_parse!(
-        input,
-        ws!(tag!("for")) >>
-        ws!(char!('(')) >>
-        a: parse_name >>
-        ws!(tag!("in")) >>
-        b: parse_name >>
-        ws!(char!(')')) >>
-        body: parse_stmt >>
-        (Stmt::ForIn(a, b, Box::new(body)))
-    )
+parser! {
+    pub fn parse_stmt_list['a, I]()(I) -> StmtList
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        between(
+            skip_wrapping_spaces(char('{')),
+            skip_wrapping_spaces(char('}')),
+            sep_end_by(parse_stmt(), attempt(skip_wrapping_spaces(char(';')))).map(|stmts| StmtList(stmts)),
+        )
+    }
 }
 
-#[rustfmt::skip]
-fn parse_terminatable(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    alt!(
-        input,
-        parse_simple_stmt
-        | ws!(tag!("break")) => { |_| Stmt::Break }
-        | ws!(tag!("continue")) => { |_| Stmt::Continue }
-        | ws!(tag!("next")) => { |_| Stmt::Next }
-        | do_parse!(
-            ws!(tag!("exit")) >>
-            code: opt!(parse_expr) >>
-            (Stmt::Exit(code))
+parser! {
+    fn parse_if_else['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        (
+            skip_wrapping_spaces(string("if")),
+            between(
+                skip_wrapping_spaces(char('(')),
+                skip_wrapping_spaces(char(')')),
+                parse_expr(),
+            ),
+            parse_stmt(),
+            optional(
+                skip_wrapping_spaces(string("else"))
+                .with(parse_stmt())
+            ),
         )
-        | do_parse!(
-            ws!(tag!("return")) >>
-            code: opt!(parse_expr) >>
-            (Stmt::Return(code))
-        )
-    )
+        .map(|(_, cond, ok, ko)| Stmt::IfElse(cond, Box::new(ok), ko.map(|v| Box::new(v))))
+    }
 }
 
-fn parse_simple_stmt(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    alt!(
-        input,
-        parse_delete
-        | parse_expr => { |e| Stmt::Expr(e) }
-        | parse_print_stmt
-    )
+parser! {
+    fn parse_while['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        skip_wrapping_spaces(string("while"))
+            .with(between(
+                skip_wrapping_spaces(char('(')),
+                skip_wrapping_spaces(char(')')),
+                parse_expr(),
+            ))
+            .and(parse_stmt())
+            .map(|(cond, body)| Stmt::While(cond, Box::new(body)))
+    }
 }
 
-#[rustfmt::skip]
-fn parse_delete(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    do_parse!(
-        input,
-        ws!(tag!("delete")) >>
-        name: parse_name >>
-        exprs: delimited!(
-            ws!(char!('[')),
-            parse_expr_list1,
-            ws!(char!(']'))
-        ) >>
-        (Stmt::Delete(name, exprs))
-    )
+parser! {
+    fn parse_do_while['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        skip_wrapping_spaces(string("do"))
+            .with(parse_stmt())
+            .skip(skip_wrapping_spaces(string("while")))
+            .and(between(
+                skip_wrapping_spaces(char('(')),
+                skip_wrapping_spaces(char(')')),
+                parse_expr(),
+            ))
+            .map(|(body, cond)| Stmt::DoWhile(cond, Box::new(body)))
+    }
 }
 
-#[rustfmt::skip]
-fn parse_print_stmt(input: CompleteStr) -> IResult<CompleteStr, Stmt> {
-    alt!(
-        input,
-        do_parse!(
-            ws!(tag!("printf")) >>
-            exprs: delimited!(
-                ws!(char!('(')),
-                parse_expr_list1,
-                ws!(char!(')'))
-            ) >>
-            redir: opt!(parse_output_redirection) >>
-            (Stmt::Printf(exprs, redir))
+parser! {
+    fn parse_for['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        (
+            skip_wrapping_spaces(string("for")).with(skip_wrapping_spaces(char('('))),
+            optional(parse_simple_stmt()),
+            skip_wrapping_spaces(char(';')),
+            optional(parse_expr()),
+            skip_wrapping_spaces(char(';')),
+            optional(parse_simple_stmt()),
+            skip_wrapping_spaces(char(')')),
+            parse_stmt(),
         )
-        | do_parse!(
-            ws!(tag!("print")) >>
-            exprs: delimited!(
-                ws!(char!('(')),
-                parse_expr_list1,
-                ws!(char!(')'))
-            ) >>
-            redir: opt!(parse_output_redirection) >>
-            (Stmt::Print(exprs, redir))
+        .map(|(_, start, _, until, _, step, _, body)|
+            Stmt::For(
+                start.map(|s| Box::new(s)),
+                until,
+                step.map(|s| Box::new(s)),
+                Box::new(body)
+            )
         )
-        | do_parse!(
-            ws!(tag!("printf")) >>
-            exprs: parse_print_expr_list1 >>
-            redir: opt!(parse_output_redirection) >>
-            (Stmt::Printf(exprs, redir))
-        )
-        | do_parse!(
-            ws!(tag!("print")) >>
-            exprs: parse_print_expr_list1 >>
-            redir: opt!(parse_output_redirection) >>
-            (Stmt::Print(exprs, redir))
-        )
-    )
+    }
 }
 
-fn parse_output_redirection(input: CompleteStr) -> IResult<CompleteStr, OutputRedirection> {
-    alt!(
-        input,
-        preceded!(ws!(tag!(">>")), parse_print_expr) => {
-            |expr| OutputRedirection::Append(expr)
-        }
-        | preceded!(ws!(char!('>')), parse_print_expr) => {
-            |expr| OutputRedirection::Truncate(expr)
-        }
-        | preceded!(ws!(char!('|')), parse_print_expr) => {
-            |expr| OutputRedirection::Pipe(expr)
-        }
-    )
+parser! {
+    fn parse_for_in['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        (
+            skip_wrapping_spaces(string("for")).with(skip_wrapping_spaces(char('('))),
+            parse_name(),
+            skip_wrapping_spaces(string("in")),
+            parse_name(),
+            skip_wrapping_spaces(char(')')),
+            parse_stmt(),
+        )
+        .map(|(_, a, _, b, _, body)| Stmt::ForIn(a, b, Box::new(body)))
+    }
+}
+
+fn parse_terminatable<'a, I>() -> impl Parser<Input = I, Output = Stmt> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str> + 'a,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        parse_simple_stmt(),
+        skip_wrapping_spaces(string("break")).map(|_| Stmt::Break),
+        skip_wrapping_spaces(string("continue")).map(|_| Stmt::Continue),
+        skip_wrapping_spaces(string("next")).map(|_| Stmt::Next),
+        skip_wrapping_spaces(string("exit"))
+            .with(optional(parse_expr()))
+            .map(|code| Stmt::Exit(code)),
+        skip_wrapping_spaces(string("return"))
+            .with(optional(parse_expr()))
+            .map(|code| Stmt::Return(code)),
+    ))
+}
+
+fn parse_simple_stmt<'a, I>() -> impl Parser<Input = I, Output = Stmt> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str> + 'a,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        attempt(parse_expr().map(|e| Stmt::Expr(e))),
+        attempt(parse_delete()),
+        attempt(parse_print_stmt()),
+    ))
+}
+
+fn parse_delete<'a, I>() -> impl Parser<Input = I, Output = Stmt> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str> + 'a,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    skip_wrapping_spaces(string("delete"))
+        .with(parse_name())
+        .and(between(
+            skip_wrapping_spaces(char('[')),
+            skip_wrapping_spaces(char(']')),
+            parse_expr_list1(),
+        ))
+        .map(|(name, exprs)| Stmt::Delete(name, exprs))
+}
+
+fn parse_print_stmt<'a, I>() -> impl Parser<Input = I, Output = Stmt> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str> + 'a,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        attempt(
+            skip_wrapping_spaces(string("printf"))
+                .with(between(
+                    skip_wrapping_spaces(char('(')),
+                    skip_wrapping_spaces(char(')')),
+                    parse_expr_list1(),
+                ))
+                .and(optional(parse_output_redirection())),
+        )
+        .map(|(exprs, redir)| Stmt::Printf(exprs, redir)),
+        attempt(
+            skip_wrapping_spaces(string("print"))
+                .with(between(
+                    skip_wrapping_spaces(char('(')),
+                    skip_wrapping_spaces(char(')')),
+                    parse_expr_list1(),
+                ))
+                .and(optional(parse_output_redirection())),
+        )
+        .map(|(exprs, redir)| Stmt::Print(exprs, redir)),
+        attempt(
+            skip_wrapping_spaces(string("printf"))
+                .with(parse_print_expr_list1())
+                .and(optional(parse_output_redirection())),
+        )
+        .map(|(exprs, redir)| Stmt::Printf(exprs, redir)),
+        attempt(
+            skip_wrapping_spaces(string("print"))
+                .with(parse_print_expr_list1())
+                .and(optional(parse_output_redirection())),
+        )
+        .map(|(exprs, redir)| Stmt::Print(exprs, redir)),
+    ))
+}
+
+fn parse_output_redirection<'a, I>() -> impl Parser<Input = I, Output = OutputRedirection> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str> + 'a,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        attempt(skip_wrapping_spaces(string(">>")).with(parse_print_expr()))
+            .map(|expr| OutputRedirection::Append(expr)),
+        attempt(skip_wrapping_spaces(char('>')).with(parse_print_expr()))
+            .map(|expr| OutputRedirection::Truncate(expr)),
+        attempt(skip_wrapping_spaces(char('|')).with(parse_print_expr()))
+            .map(|expr| OutputRedirection::Pipe(expr)),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use combine::stream::state::State;
 
     fn assert_stmt(input: &str, expected: Stmt) {
-        let stmt = parse_stmt(CompleteStr::from(input));
-        assert!(stmt.is_ok(), "input: {}\n{:?}", input, stmt);
+        let stmt = parse_stmt().easy_parse(State::new(input));
+        assert!(stmt.is_ok(), "input: {}\n{}", input, stmt.unwrap_err());
         let stmt = stmt.unwrap();
-        assert!(stmt.0.is_empty(), "input: {}\n{:?}", input, stmt);
         assert_eq!(
-            stmt.1, expected,
-            "\nexpected:\n{}\n\nactual:\n{}",
-            expected, stmt.1
+            stmt.0, expected,
+            "input: {}\nexpected:\n{}\n\nactual:\n{}\n{:?}",
+            input, expected, stmt.0, stmt
         );
     }
 
     fn assert_stmt_with_leftovers(input: &str, expected: Stmt, leftover: &str) {
-        let stmt = parse_stmt(CompleteStr::from(input));
+        let stmt = parse_stmt().easy_parse(input);
         assert!(stmt.is_ok(), "{:?}", stmt);
         let stmt = stmt.unwrap();
-        assert!(!stmt.0.is_empty());
-        assert_eq!(stmt.0.as_ref(), leftover);
-        assert_eq!(stmt.1, expected, "{}", stmt.1);
+        assert_eq!(stmt.1, leftover);
+        assert_eq!(stmt.0, expected, "{}", stmt.0);
     }
 
     #[test]

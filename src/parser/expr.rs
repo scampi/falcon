@@ -2,19 +2,21 @@ use crate::parser::ast::*;
 use crate::parser::util::{
     parse_func_name, parse_name, parse_regexp, parse_string, skip_wrapping_spaces,
 };
+use combine::parser::combinator::Try;
 use combine::{
     error::{ParseError, StreamError},
     parser::{
         char::{char, digit, space, spaces, string},
         choice::{choice, optional},
         combinator::attempt,
-        item::one_of,
+        item::{one_of, value},
         repeat::{many1, sep_by, sep_by1},
         sequence::between,
         Parser,
     },
     stream::{RangeStream, Stream, StreamErrorFor},
 };
+use combine::parser::choice::ChoiceParser;
 use regex::Regex;
 
 // import macros
@@ -25,19 +27,47 @@ use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
 // - builtin without args
 // - array with the body as a group with comma-separated exprs
 
+pub fn parse_expr<'a, I: 'a>() -> impl Parser<Input = I, Output = Expr> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    do_parse_expr(false)
+}
+
+pub fn parse_print_expr<'a, I: 'a>() -> impl Parser<Input = I, Output = Expr> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    do_parse_expr(true)
+}
+
 parser! {
-    pub fn parse_expr['a, I]()(I) -> Expr
+    fn do_parse_expr['a, I](print_expr: bool)(I) -> Expr
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
         parse_conditional_expr(
-        parse_or_expr(parse_and_expr(parse_array_expr(parse_match_expr(parse_comparison_expr(
-            parse_concat_expr(parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(
-                leaf(),
-            )))),
-        ))))))
+            *print_expr,
+            parse_or_expr(
+                *print_expr,
+                parse_and_expr(
+                    *print_expr,
+                    parse_array_expr(parse_match_expr(
+                        *print_expr,
+                        parse_comparison_expr(
+                            *print_expr,
+                            parse_concat_expr(parse_add_sub_expr(parse_mul_div_mod_expr(
+                                parse_pow_expr(leaf()),
+                            ))),
+                        ),
+                    )),
+                ),
+            ),
+        )
     }
 }
 
@@ -48,7 +78,18 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by(parse_expr(), skip_wrapping_spaces(char(','))).map(|exprs| ExprList(exprs))
+        sep_by(parse_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+    }
+}
+
+parser! {
+    pub fn parse_print_expr_list1['a, I]()(I) -> ExprList
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        sep_by1(parse_print_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
     }
 }
 
@@ -59,7 +100,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by1(parse_expr(), skip_wrapping_spaces(char(','))).map(|exprs| ExprList(exprs))
+        sep_by1(parse_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
     }
 }
 
@@ -171,22 +212,36 @@ parser! {
 }
 
 parser! {
-    fn parse_comparison_expr['a, I, P](p: P)(I) -> Expr
+    fn parse_comparison_expr['a, I, P](print_expr: bool, p: P)(I) -> Expr
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
         I::Error: ParseError<I::Item, I::Range, I::Position>,
         P: Parser<Input = I, Output = Expr> + 'a,
     ]
     {
-        p.and(optional(
+        let ops = if *print_expr {
             choice((
-                attempt(skip_wrapping_spaces(string("<="))),
-                attempt(skip_wrapping_spaces(string("<"))),
-                attempt(skip_wrapping_spaces(string("!="))),
-                attempt(skip_wrapping_spaces(string("=="))),
-                attempt(skip_wrapping_spaces(string(">="))),
-                attempt(skip_wrapping_spaces(string(">"))),
+               attempt(skip_wrapping_spaces(string("<="))),
+               attempt(skip_wrapping_spaces(string("<"))),
+               attempt(skip_wrapping_spaces(string("!="))),
+               attempt(skip_wrapping_spaces(string("=="))),
+               attempt(skip_wrapping_spaces(string(">="))),
+               // hack to have both tuples with the the same size
+               attempt(skip_wrapping_spaces(string(">="))),
             ))
+        } else {
+            choice((
+               attempt(skip_wrapping_spaces(string("<="))),
+               attempt(skip_wrapping_spaces(string("<"))),
+               attempt(skip_wrapping_spaces(string("!="))),
+               attempt(skip_wrapping_spaces(string("=="))),
+               attempt(skip_wrapping_spaces(string(">="))),
+               attempt(skip_wrapping_spaces(string(">"))),
+            ))
+        };
+
+        p.and(optional(
+            ops
             .and(parse_concat_expr(parse_add_sub_expr(
                 parse_mul_div_mod_expr(parse_pow_expr(leaf())),
             ))),
@@ -206,7 +261,7 @@ parser! {
 }
 
 parser! {
-    fn parse_match_expr['a, I, P](p: P)(I) -> Expr
+    fn parse_match_expr['a, I, P](print_expr: bool, p: P)(I) -> Expr
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
         I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -218,7 +273,7 @@ parser! {
                 attempt(skip_wrapping_spaces(string("!~"))),
                 attempt(skip_wrapping_spaces(string("~"))),
             ))
-            .and(parse_comparison_expr(parse_concat_expr(
+            .and(parse_comparison_expr(*print_expr, parse_concat_expr(
                 parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
             ))),
         )))
@@ -258,7 +313,7 @@ parser! {
 }
 
 parser! {
-    fn parse_and_expr['a, I, P](p: P)(I) -> Expr
+    fn parse_and_expr['a, I, P](print_expr: bool, p: P)(I) -> Expr
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
         I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -266,10 +321,15 @@ parser! {
     ]
     {
         p.and(optional(many1::<Vec<Expr>, _>(
-            attempt(skip_wrapping_spaces(string("&&")))
-            .with(parse_array_expr(parse_match_expr(parse_comparison_expr(parse_concat_expr(
-                parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))))),
-            )))
+            attempt(skip_wrapping_spaces(string("&&"))).with(parse_array_expr(parse_match_expr(
+                *print_expr,
+                parse_comparison_expr(
+                    *print_expr,
+                    parse_concat_expr(parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(
+                        leaf(),
+                    )))),
+                ),
+            ))),
         )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
@@ -287,7 +347,7 @@ parser! {
 }
 
 parser! {
-    fn parse_or_expr['a, I, P](p: P)(I) -> Expr
+    fn parse_or_expr['a, I, P](print_expr: bool, p: P)(I) -> Expr
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
         I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -295,11 +355,18 @@ parser! {
     ]
     {
         p.and(optional(many1::<Vec<Expr>, _>(
-            attempt(skip_wrapping_spaces(string("||"))).with(parse_and_expr(parse_array_expr(
-                parse_match_expr(parse_comparison_expr(parse_concat_expr(
-                    parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
-                ))),
-            ))),
+            attempt(skip_wrapping_spaces(string("||"))).with(parse_and_expr(
+                *print_expr,
+                parse_array_expr(parse_match_expr(
+                    *print_expr,
+                    parse_comparison_expr(
+                        *print_expr,
+                        parse_concat_expr(parse_add_sub_expr(parse_mul_div_mod_expr(
+                            parse_pow_expr(leaf()),
+                        ))),
+                    ),
+                )),
+            )),
         )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
@@ -317,7 +384,7 @@ parser! {
 }
 
 parser! {
-    fn parse_conditional_expr['a, I, P](p: P)(I) -> Expr
+    fn parse_conditional_expr['a, I, P](print_expr: bool, p: P)(I) -> Expr
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
         I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -325,18 +392,41 @@ parser! {
     ]
     {
         p.and(optional(
-            attempt(skip_wrapping_spaces(char('?'))).with(parse_or_expr(parse_and_expr(
-                parse_array_expr(parse_match_expr(parse_comparison_expr(parse_concat_expr(
-                    parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
-                ))))
-            )))
-            .and(
-                skip_wrapping_spaces(char(':')).with(parse_conditional_expr(parse_or_expr(parse_and_expr(
-                    parse_array_expr(parse_match_expr(parse_comparison_expr(parse_concat_expr(
-                        parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
-                    ))))
-                ))))
-        )))
+            attempt(skip_wrapping_spaces(char('?')))
+                .with(parse_or_expr(
+                    *print_expr,
+                    parse_and_expr(
+                        *print_expr,
+                        parse_array_expr(parse_match_expr(
+                            *print_expr,
+                            parse_comparison_expr(
+                                *print_expr,
+                                parse_concat_expr(parse_add_sub_expr(parse_mul_div_mod_expr(
+                                    parse_pow_expr(leaf()),
+                                ))),
+                            ),
+                        )),
+                    ),
+                ))
+                .and(skip_wrapping_spaces(char(':')).with(parse_conditional_expr(
+                    *print_expr,
+                    parse_or_expr(
+                        *print_expr,
+                        parse_and_expr(
+                            *print_expr,
+                            parse_array_expr(parse_match_expr(
+                                *print_expr,
+                                parse_comparison_expr(
+                                    *print_expr,
+                                    parse_concat_expr(parse_add_sub_expr(parse_mul_div_mod_expr(
+                                        parse_pow_expr(leaf()),
+                                    ))),
+                                ),
+                            )),
+                        ),
+                    ),
+                ))),
+        ))
         .map(|(left_expr, rest)| {
             if let Some((ok, ko)) = rest {
                 Expr::Conditional(Box::new(left_expr), Box::new(ok), Box::new(ko))
@@ -483,7 +573,9 @@ parser! {
                 attempt(skip_wrapping_spaces(string("-="))),
             )))
             .and(parse_expr())
-            .map(|((lvalue, op), rvalue)| Expr::Assign(AssignType::new(&op), lvalue, Box::new(rvalue)))
+            .map(|((lvalue, op), rvalue)| {
+                Expr::Assign(AssignType::new(&op), lvalue, Box::new(rvalue))
+            })
     }
 }
 
