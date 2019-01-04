@@ -12,4 +12,6 @@ pub enum EvaluationError {
 pub enum ParseError {
     #[fail(display = "Invalid name: {}", _0)]
     InvalidName(String),
+    #[fail(display = "Invalid regex: {}", _0)]
+    InvalidRegex(regex::Error),
 }

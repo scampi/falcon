@@ -16,12 +16,35 @@ use combine::{
     stream::{RangeStream, Stream, StreamErrorFor, StreamOnce},
     *,
 };
+use regex::Regex;
 use std::fmt;
 
 // TODO:
 // - getline
 // - builtin without args
 // - array with the body as a group with comma-separated exprs
+
+#[derive(Debug)]
+pub struct RegexEq(Regex);
+
+impl PartialEq for RegexEq {
+    fn eq(&self, other: &RegexEq) -> bool {
+        self.0.as_str() == other.0.as_str()
+    }
+}
+
+impl fmt::Display for RegexEq {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl RegexEq {
+    #[cfg(test)]
+    fn new(reg: &str) -> RegexEq {
+        RegexEq(Regex::new(reg).unwrap())
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct ExprList(pub Vec<Expr>);
@@ -58,7 +81,7 @@ pub enum Expr {
     Number(f64),
     String(String),
     LValue(LValueType),
-    Regexp(String),
+    Regexp(RegexEq),
     PreIncrement(LValueType),
     PreDecrement(LValueType),
     PostIncrement(LValueType),
@@ -544,7 +567,16 @@ parser! {
     {
         choice((
             attempt(parse_string().map(|s: String| Expr::String(s))),
-            attempt(parse_regexp().map(|ere: String| Expr::Regexp(ere))),
+            attempt(parse_regexp()).and_then(|ere: String| {
+                match Regex::new(&ere) {
+                    Ok(ere) => Ok(Expr::Regexp(RegexEq(ere))),
+                    Err(e) => {
+                        let msg = format!("{}", crate::errors::ParseError::InvalidRegex(e));
+                        let err = StreamErrorFor::<I>::message_message(msg);
+                        Err(err)
+                    }
+                }
+            }),
             attempt(parse_number()),
             attempt(between(
                 skip_wrapping_spaces(char('(')),
@@ -709,7 +741,7 @@ mod tests {
         assert_expr("42.5", Expr::Number(42.5));
         assert_expr("   42.5 \t\n  ", Expr::Number(42.5));
         assert_expr(r#""42""#, Expr::String("42".to_owned()));
-        assert_expr("/42/", Expr::Regexp("42".to_owned()));
+        assert_expr("/42/", Expr::Regexp(RegexEq::new("42")));
         assert_expr("(42)", Expr::Grouping(Box::new(Expr::Number(42.0))));
         assert_expr("+ 42", Expr::UnaryPlus(Box::new(Expr::Number(42.0))));
         assert_expr("- 42", Expr::UnaryMinus(Box::new(Expr::Number(42.0))));
@@ -1658,7 +1690,6 @@ mod tests {
 
     #[test]
     fn conditional() {
-        /*
         assert_expr(
             "1 ? 2 : 3",
             Expr::Conditional(
@@ -1684,7 +1715,7 @@ mod tests {
                     Box::new(Expr::Number(4.0)),
                 )),
             ),
-        );*/
+        );
         assert_expr(
             r#"num == 1 ? "number 1" : num == 2 ? "number 2" : "something else""#,
             Expr::Conditional(
@@ -1795,10 +1826,20 @@ mod tests {
             "1 ? /ok/ : /ko/",
             Expr::Conditional(
                 Box::new(Expr::Number(1.0)),
-                Box::new(Expr::Regexp("ok".to_string())),
-                Box::new(Expr::Regexp("ko".to_string())),
+                Box::new(Expr::Regexp(RegexEq::new("ok"))),
+                Box::new(Expr::Regexp(RegexEq::new("ko"))),
             ),
         );
+
+        //let input = r#"1 ? "ok" : /bad {/"#;
+        //let expr = parse_expr().easy_parse(State::new(input));
+        //assert!(expr.is_err(), "input: {}\n{:?}", input, expr.unwrap());
+        //println!("expr.unwrap_err() = [{}]", expr.unwrap_err());
+
+        //let input = r#"/bad {/"#;
+        //let expr = parse_expr().easy_parse(State::new(input));
+        //assert!(expr.is_err(), "input: {}\n{:?}", input, expr.unwrap());
+        //println!("expr.unwrap_err() = [{}]", expr.unwrap_err());
     }
 
     #[test]
