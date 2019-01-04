@@ -1,22 +1,20 @@
-use crate::parser::ast::*;
-use crate::parser::util::{
-    parse_func_name, parse_name, parse_regexp, parse_string, skip_wrapping_spaces,
+use crate::parser::{
+    ast::*,
+    util::{parse_func_name, parse_name, parse_regexp, parse_string, skip_wrapping_spaces},
 };
-use combine::parser::combinator::Try;
 use combine::{
     error::{ParseError, StreamError},
     parser::{
         char::{char, digit, space, spaces, string},
         choice::{choice, optional},
         combinator::attempt,
-        item::{one_of, value},
+        item::one_of,
         repeat::{many1, sep_by, sep_by1},
         sequence::between,
         Parser,
     },
     stream::{RangeStream, Stream, StreamErrorFor},
 };
-use combine::parser::choice::ChoiceParser;
 use regex::Regex;
 
 // import macros

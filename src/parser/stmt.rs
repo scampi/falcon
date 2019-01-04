@@ -1,22 +1,20 @@
 use crate::parser::{
     ast::*,
     expr::*,
-    util::{parse_func_name, parse_name, parse_regexp, parse_string, skip_wrapping_spaces},
+    util::{parse_name, skip_wrapping_spaces},
 };
 use combine::{
-    error::{ParseError, StreamError},
+    error::ParseError,
     parser::{
-        char::{char, digit, space, spaces, string},
+        char::{char, string},
         choice::{choice, optional},
         combinator::attempt,
-        item::one_of,
-        repeat::{many1, sep_by, sep_by1, sep_end_by},
+        repeat::sep_end_by,
         sequence::between,
         Parser,
     },
-    stream::{RangeStream, Stream, StreamErrorFor},
+    stream::RangeStream,
 };
-use std::fmt;
 
 // import macros
 use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
