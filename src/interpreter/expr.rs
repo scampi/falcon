@@ -150,6 +150,9 @@ impl Eval for Expr {
                     value
                 },
             },
+            Expr::Regexp(reg) => {
+                Ok(Value::from(reg.is_match(&cxt.record.get(0)?.as_string())))
+            },
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
             Expr::UnaryPlus(up) => up.eval(cxt),
             Expr::Grouping(g) => g.eval(cxt),
@@ -679,5 +682,19 @@ mod tests {
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from("10".to_owned()));
         assert_eq!(cxt.record.get(1), Ok(Value::from("9".to_owned())));
+    }
+
+    #[test]
+    fn regexp() {
+        let mut cxt = Context::new();
+
+        cxt.set_next_record("john connor".to_owned());
+        let expr = get_expr("/^j.*r$/");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        let expr = get_expr("/jane/");
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(false));
     }
 }

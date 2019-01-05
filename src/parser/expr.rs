@@ -5,7 +5,7 @@ use crate::parser::{
 use combine::{
     error::{ParseError, StreamError},
     parser::{
-        char::{char, digit, space, spaces, string},
+        char::{char, digit, spaces, string},
         choice::{choice, optional},
         combinator::attempt,
         item::one_of,
