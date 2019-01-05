@@ -1,7 +1,7 @@
 use crate::{
     errors::EvaluationError,
     interpreter::{value::Value, variables::Variables},
-    parser::expr::AssignType,
+    parser::ast::AssignType,
 };
 
 #[derive(Debug)]

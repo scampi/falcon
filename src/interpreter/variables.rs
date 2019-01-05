@@ -1,6 +1,6 @@
 use std::collections::{hash_map::Entry, HashMap};
 
-use crate::{errors::EvaluationError, interpreter::value::Value, parser::expr::AssignType};
+use crate::{errors::EvaluationError, interpreter::value::Value, parser::ast::AssignType};
 
 #[derive(Debug)]
 pub struct Variables {

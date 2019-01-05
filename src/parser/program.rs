@@ -2,7 +2,7 @@ use crate::parser::{
     ast::*,
     expr::*,
     stmt::*,
-    util::{parse_name, parse_func_name, skip_wrapping_spaces},
+    util::{parse_func_name, parse_name, skip_wrapping_spaces},
 };
 use combine::{
     error::ParseError,
@@ -10,7 +10,7 @@ use combine::{
         char::{char, string},
         choice::{choice, optional},
         item::one_of,
-        repeat::{sep_by, many, skip_many},
+        repeat::{many, sep_by, skip_many},
         sequence::between,
         Parser,
     },
@@ -22,8 +22,7 @@ where
     I: RangeStream<Item = char, Range = &'a str> + 'a,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    many(parse_item().skip(skip_many(one_of(" \t\r\n;".chars()))))
-    .map(|items| Program::new(items))
+    many(parse_item().skip(skip_many(one_of(" \t\r\n;".chars())))).map(|items| Program::new(items))
 }
 
 fn parse_item<'a, I>() -> impl Parser<Input = I, Output = Item> + 'a
@@ -32,8 +31,9 @@ where
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     choice((
-        parse_pattern().and(parse_stmt_list())
-        .map(|(pattern, action)| Item::PatternAction(pattern, action)),
+        parse_pattern()
+            .and(parse_stmt_list())
+            .map(|(pattern, action)| Item::PatternAction(pattern, action)),
         parse_stmt_list().map(|stmts| Item::Action(stmts)),
         parse_function_def(),
     ))
@@ -47,12 +47,15 @@ where
     choice((
         skip_wrapping_spaces(string("BEGIN")).map(|_| Pattern::Begin),
         skip_wrapping_spaces(string("END")).map(|_| Pattern::End),
-        parse_expr().and(optional(skip_wrapping_spaces(char(',')).with(parse_expr())))
-        .map(|(e1, e2)| if let Some(e2) = e2 {
-            Pattern::Exprs(ExprList(vec![e1, e2]))
-        } else {
-            Pattern::Exprs(ExprList(vec![e1]))
-        }),
+        parse_expr()
+            .and(optional(skip_wrapping_spaces(char(',')).with(parse_expr())))
+            .map(|(e1, e2)| {
+                if let Some(e2) = e2 {
+                    Pattern::Exprs(ExprList(vec![e1, e2]))
+                } else {
+                    Pattern::Exprs(ExprList(vec![e1]))
+                }
+            }),
     ))
 }
 
@@ -67,11 +70,11 @@ where
         between(
             skip_wrapping_spaces(char('(')),
             skip_wrapping_spaces(char(')')),
-            sep_by(parse_name(), skip_wrapping_spaces(char(',')))
+            sep_by(parse_name(), skip_wrapping_spaces(char(','))),
         ),
         parse_stmt_list(),
     )
-    .map(|(_, fname, args, body)| Item::FunctionDef(fname, args, body))
+        .map(|(_, fname, args, body)| Item::FunctionDef(fname, args, body))
 }
 
 #[cfg(test)]

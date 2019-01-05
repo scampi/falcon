@@ -1,6 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    parser::expr::{AssignType, CmpOperator},
+    parser::ast::{AssignType, CmpOperator},
 };
 use std::fmt;
 

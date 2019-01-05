@@ -25,6 +25,14 @@ use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
 // - builtin without args
 // - array with the body as a group with comma-separated exprs
 
+#[cfg(test)]
+pub fn get_expr(input: &str) -> Expr {
+    use combine::stream::state::State;
+    let expr = parse_expr().easy_parse(State::new(input));
+    assert!(expr.is_ok(), "input: {}\n{}", input, expr.unwrap_err());
+    expr.unwrap().0
+}
+
 pub fn parse_expr<'a, I: 'a>() -> impl Parser<Input = I, Output = Expr> + 'a
 where
     I: RangeStream<Item = char, Range = &'a str>,
@@ -196,8 +204,8 @@ parser! {
     ]
     {
         p.and(optional(many1::<Vec<Expr>, _>(attempt(
-            space().with(parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))))),
-        )))
+            parse_add_sub_expr(parse_mul_div_mod_expr(parse_pow_expr(leaf()))),
+        ))))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
                 rest.into_iter()
@@ -1084,6 +1092,16 @@ mod tests {
                     Box::new(Expr::Number(2.0)),
                 )),
                 Box::new(Expr::Number(3.0)),
+            ),
+        );
+        assert_expr(
+            r#"1 " and " 2"#,
+            Expr::Concat(
+                Box::new(Expr::Concat(
+                    Box::new(Expr::Number(1.0)),
+                    Box::new(Expr::String(" and ".to_owned())),
+                )),
+                Box::new(Expr::Number(2.0)),
             ),
         );
     }
