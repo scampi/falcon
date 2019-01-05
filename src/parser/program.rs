@@ -1,147 +1,103 @@
-use nom::{types::CompleteStr, *};
-use std::fmt;
+use crate::parser::{
+    ast::*,
+    expr::*,
+    stmt::*,
+    util::{parse_name, parse_func_name, skip_wrapping_spaces},
+};
+use combine::{
+    error::ParseError,
+    parser::{
+        char::{char, string},
+        choice::{choice, optional},
+        item::one_of,
+        repeat::{sep_by, many, skip_many},
+        sequence::between,
+        Parser,
+    },
+    stream::RangeStream,
+};
 
-use crate::parser::{expr::*, stmt::*, util::parse_name};
-
-#[derive(Debug, PartialEq)]
-pub struct Program {
-    items: Vec<Item>,
+pub fn parse_program<'a, I>() -> impl Parser<Input = I, Output = Program> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str> + 'a,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    many(parse_item().skip(skip_many(one_of(" \t\r\n;".chars()))))
+    .map(|items| Program::new(items))
 }
 
-impl Program {
-    fn new(items: Vec<Item>) -> Program {
-        Program { items }
-    }
+fn parse_item<'a, I>() -> impl Parser<Input = I, Output = Item> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str> + 'a,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        parse_pattern().and(parse_stmt_list())
+        .map(|(pattern, action)| Item::PatternAction(pattern, action)),
+        parse_stmt_list().map(|stmts| Item::Action(stmts)),
+        parse_function_def(),
+    ))
 }
 
-impl fmt::Display for Program {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for item in &self.items {
-            write!(f, "{};", item)?;
-        }
-        Ok(())
-    }
+fn parse_pattern<'a, I>() -> impl Parser<Input = I, Output = Pattern> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str> + 'a,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        skip_wrapping_spaces(string("BEGIN")).map(|_| Pattern::Begin),
+        skip_wrapping_spaces(string("END")).map(|_| Pattern::End),
+        parse_expr().and(optional(skip_wrapping_spaces(char(',')).with(parse_expr())))
+        .map(|(e1, e2)| if let Some(e2) = e2 {
+            Pattern::Exprs(ExprList(vec![e1, e2]))
+        } else {
+            Pattern::Exprs(ExprList(vec![e1]))
+        }),
+    ))
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Item {
-    Action(StmtList),
-    PatternAction(Pattern, StmtList),
-    FunctionDef(String, Vec<String>, StmtList),
-}
-
-impl fmt::Display for Item {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Item::Action(stmts) => write!(f, "{}", stmts),
-            Item::PatternAction(pattern, action) => write!(f, "{} {}", pattern, action),
-            Item::FunctionDef(name, args, stmts) => {
-                write!(f, "function {}(", name)?;
-                for arg in args {
-                    write!(f, "{}, ", arg)?;
-                }
-                write!(f, ") {}", stmts)
-            },
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Pattern {
-    Begin,
-    End,
-    Exprs(ExprList),
-}
-
-impl fmt::Display for Pattern {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Pattern::Begin => write!(f, "BEGIN"),
-            Pattern::End => write!(f, "END"),
-            Pattern::Exprs(exprs) => write!(f, "{}", exprs),
-        }
-    }
-}
-
-named!(eat_terminator<CompleteStr, CompleteStr>, eat_separator!(" \r\n\t;"));
-
-pub fn parse_program(input: &str) -> Program {
-    let complete_input = CompleteStr::from(input);
-    exact!(
-        &complete_input,
-        map!(many0!(wrap_sep!(eat_terminator, parse_item)), |items| {
-            Program::new(items)
-        })
+fn parse_function_def<'a, I>() -> impl Parser<Input = I, Output = Item> + 'a
+where
+    I: RangeStream<Item = char, Range = &'a str> + 'a,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (
+        skip_wrapping_spaces(string("function")),
+        parse_func_name(),
+        between(
+            skip_wrapping_spaces(char('(')),
+            skip_wrapping_spaces(char(')')),
+            sep_by(parse_name(), skip_wrapping_spaces(char(',')))
+        ),
+        parse_stmt_list(),
     )
-    .unwrap()
-    .1
-}
-
-#[rustfmt::skip]
-#[allow(dead_code)]
-fn parse_item(input: CompleteStr) -> IResult<CompleteStr, Item> {
-    alt!(
-        input,
-        do_parse!(
-            pattern: parse_pattern >>
-            action: parse_stmt_list >>
-            (Item::PatternAction(pattern, action))
-        )
-        | parse_stmt_list => { |stmts| Item::Action(stmts) }
-        | parse_function_def
-    )
-}
-
-#[allow(dead_code)]
-fn parse_pattern(input: CompleteStr) -> IResult<CompleteStr, Pattern> {
-    alt!(
-        input,
-        ws!(tag!("BEGIN")) => { |_| Pattern::Begin }
-        | ws!(tag!("END")) => { |_| Pattern::End }
-        | separated_pair!(parse_expr, ws!(char!(',')), parse_expr) => {
-            |(e1, e2)| Pattern::Exprs(ExprList(vec![e1, e2]))
-        }
-        | parse_expr => { |expr| Pattern::Exprs(ExprList(vec![expr])) }
-    )
-}
-
-#[rustfmt::skip]
-#[allow(dead_code)]
-fn parse_function_def(input: CompleteStr) -> IResult<CompleteStr, Item> {
-    do_parse!(
-        input,
-        ws!(tag!("function")) >>
-        fname: parse_name >>
-        char!('(') >>
-        args: separated_list!(ws!(char!(',')), parse_name) >>
-        char!(')') >>
-        body: parse_stmt_list >>
-        (Item::FunctionDef(fname, args, body))
-    )
+    .map(|(_, fname, args, body)| Item::FunctionDef(fname, args, body))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use combine::stream::state::State;
 
     fn assert_program(input: &str, expected: Program) {
-        let prog = parse_program(input);
+        let prog = parse_program().easy_parse(State::new(input));
+        assert!(prog.is_ok(), "input: {}\n{}", input, prog.unwrap_err());
+        let prog = prog.unwrap();
         assert_eq!(
-            prog, expected,
-            "\nexpected:\n{}\n\nactual:\n{}",
-            expected, prog
+            prog.0, expected,
+            "\ninput: {}\nexpected:\n{}\n\nactual:\n{}\n{:?}",
+            input, expected, prog.0, prog
         );
     }
 
     fn assert_item(input: &str, expected: Item) {
-        let item = parse_item(CompleteStr::from(input));
-        assert!(item.is_ok(), "input: {}\n{:?}", input, item);
+        let item = parse_item().easy_parse(input);
+        assert!(item.is_ok(), "input: {}\n{}", input, item.unwrap_err());
         let item = item.unwrap();
-        assert!(item.0.is_empty(), "input: {}\n{:?}", input, item);
         assert_eq!(
-            item.1, expected,
-            "\nexpected:\n{}\n\nactual:\n{}",
-            expected, item.1
+            item.0, expected,
+            "\ninput: {}\nexpected:\n{}\n\nactual:\n{}\n{:?}",
+            input, expected, item.0, item
         );
     }
 
@@ -164,7 +120,7 @@ mod tests {
         assert_item(
             "/42/ { print 42 }",
             Item::PatternAction(
-                Pattern::Exprs(ExprList(vec![Expr::Regexp("42".to_owned())])),
+                Pattern::Exprs(ExprList(vec![Expr::Regexp(RegexEq::new("42"))])),
                 StmtList(vec![Stmt::Print(ExprList(vec![Expr::Number(42f64)]), None)]),
             ),
         );

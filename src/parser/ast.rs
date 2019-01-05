@@ -2,6 +2,66 @@ use regex::Regex;
 use std::fmt;
 
 #[derive(Debug, PartialEq)]
+pub struct Program {
+    items: Vec<Item>,
+}
+
+impl Program {
+    pub fn new(items: Vec<Item>) -> Program {
+        Program { items }
+    }
+}
+
+impl fmt::Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for item in &self.items {
+            write!(f, "{};", item)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Item {
+    Action(StmtList),
+    PatternAction(Pattern, StmtList),
+    FunctionDef(String, Vec<String>, StmtList),
+}
+
+impl fmt::Display for Item {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Item::Action(stmts) => write!(f, "{}", stmts),
+            Item::PatternAction(pattern, action) => write!(f, "{} {}", pattern, action),
+            Item::FunctionDef(name, args, stmts) => {
+                write!(f, "function {}(", name)?;
+                for arg in args {
+                    write!(f, "{}, ", arg)?;
+                }
+                write!(f, ") {}", stmts)
+            },
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Pattern {
+    Begin,
+    End,
+    Exprs(ExprList),
+}
+
+impl fmt::Display for Pattern {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Pattern::Begin => write!(f, "BEGIN"),
+            Pattern::End => write!(f, "END"),
+            Pattern::Exprs(exprs) => write!(f, "{}", exprs),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct StmtList(pub Vec<Stmt>);
 
 impl fmt::Display for StmtList {
