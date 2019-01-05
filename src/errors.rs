@@ -6,12 +6,12 @@ pub enum EvaluationError {
     DivisionByZero,
     #[fail(display = "attempt to access field {}", _0)]
     NegativeFieldIndex(isize),
+    #[fail(display = "Invalid regex: {}", _0)]
+    InvalidRegex(regex::Error),
 }
 
 #[derive(PartialEq, Debug, Fail)]
 pub enum ParseError {
     #[fail(display = "Invalid name: {}", _0)]
     InvalidName(String),
-    #[fail(display = "Invalid regex: {}", _0)]
-    InvalidRegex(regex::Error),
 }

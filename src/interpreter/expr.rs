@@ -3,6 +3,7 @@ use crate::{
     interpreter::{arrays::Arrays, value::Value, Context, Eval},
     parser::ast::{AssignType, Expr, LValueType},
 };
+use regex::Regex;
 
 impl Eval for Expr {
     fn eval(&self, cxt: &mut Context) -> Result<Value, EvaluationError> {
@@ -150,8 +151,15 @@ impl Eval for Expr {
                     value
                 },
             },
-            Expr::Regexp(reg) => {
-                Ok(Value::from(reg.is_match(&cxt.record.get(0)?.as_string())))
+            Expr::Regexp(reg) => Ok(Value::from(reg.is_match(&cxt.record.get(0)?.as_string()))),
+            Expr::Match(neg, s, reg) => {
+                let reg_eval = match Regex::new(&reg.eval(cxt)?.as_string()) {
+                    Ok(reg) => reg,
+                    Err(e) => return Err(EvaluationError::InvalidRegex(e)),
+                };
+                let s_eval = s.eval(cxt)?.as_string();
+                let res = reg_eval.is_match(&s_eval);
+                Ok(Value::from(res == !*neg))
             },
             Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(cxt)?.as_number())),
             Expr::UnaryPlus(up) => up.eval(cxt),
@@ -689,6 +697,7 @@ mod tests {
         let mut cxt = Context::new();
 
         cxt.set_next_record("john connor".to_owned());
+
         let expr = get_expr("/^j.*r$/");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(true));
@@ -696,5 +705,30 @@ mod tests {
         let expr = get_expr("/jane/");
         let res = expr.eval(&mut cxt);
         assert_eq!(res.unwrap(), Value::from(false));
+    }
+
+    #[test]
+    fn r#match() {
+        let mut cxt = Context::new();
+
+        cxt.set_next_record("john connor".to_owned());
+
+        let expr = get_expr(r#"$2 ~ "con.or""#);
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(true));
+
+        cxt.set_next_record("john cannor".to_owned());
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(false));
+
+        cxt.set_next_record("john connor".to_owned());
+
+        let expr = get_expr(r#"$2 !~ "con.or""#);
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(false));
+
+        cxt.set_next_record("john cannor".to_owned());
+        let res = expr.eval(&mut cxt);
+        assert_eq!(res.unwrap(), Value::from(true));
     }
 }

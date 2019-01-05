@@ -285,10 +285,12 @@ parser! {
         )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
-                rest.into_iter().fold(left_expr, |le, (op, re)| match op {
-                    "~" => Expr::Match(Box::new(le), Box::new(re)),
-                    "!~" => Expr::NonMatch(Box::new(le), Box::new(re)),
+                rest.into_iter().fold(left_expr, |le, (op, re)| {
+                    match op {
+                    "~" => Expr::Match(false, Box::new(le), Box::new(re)),
+                    "!~" => Expr::Match(true, Box::new(le), Box::new(re)),
                     _ => unreachable!(),
+                }
                 })
             } else {
                 left_expr
@@ -456,7 +458,7 @@ parser! {
                 match Regex::new(&ere) {
                     Ok(ere) => Ok(Expr::Regexp(RegexEq(ere))),
                     Err(e) => {
-                        let msg = format!("{}", crate::errors::ParseError::InvalidRegex(e));
+                        let msg = format!("{}", crate::errors::EvaluationError::InvalidRegex(e));
                         let err = StreamErrorFor::<I>::message_message(msg);
                         Err(err)
                     }
@@ -1308,11 +1310,16 @@ mod tests {
     fn r#match() {
         assert_expr(
             "1 ~ 2",
-            Expr::Match(Box::new(Expr::Number(1.0)), Box::new(Expr::Number(2.0))),
+            Expr::Match(
+                false,
+                Box::new(Expr::Number(1.0)),
+                Box::new(Expr::Number(2.0)),
+            ),
         );
         assert_expr(
             "1 3 ~ 2 4",
             Expr::Match(
+                false,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(3.0)),
@@ -1326,6 +1333,7 @@ mod tests {
         assert_expr(
             "1 < 3 ~ 2 != 4",
             Expr::Match(
+                false,
                 Box::new(Expr::Comparison(
                     CmpOperator::LessThan,
                     Box::new(Expr::Number(1.0)),
@@ -1341,7 +1349,9 @@ mod tests {
         assert_expr(
             "1 ~ 2 ~ 3",
             Expr::Match(
+                false,
                 Box::new(Expr::Match(
+                    false,
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
                 )),
@@ -1354,11 +1364,16 @@ mod tests {
     fn non_match() {
         assert_expr(
             "1 !~ 2",
-            Expr::NonMatch(Box::new(Expr::Number(1.0)), Box::new(Expr::Number(2.0))),
+            Expr::Match(
+                true,
+                Box::new(Expr::Number(1.0)),
+                Box::new(Expr::Number(2.0)),
+            ),
         );
         assert_expr(
             "1 3 !~ 2 4",
-            Expr::NonMatch(
+            Expr::Match(
+                true,
                 Box::new(Expr::Concat(
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(3.0)),
@@ -1371,7 +1386,8 @@ mod tests {
         );
         assert_expr(
             "1 < 3 !~ 2 != 4",
-            Expr::NonMatch(
+            Expr::Match(
+                true,
                 Box::new(Expr::Comparison(
                     CmpOperator::LessThan,
                     Box::new(Expr::Number(1.0)),
@@ -1386,8 +1402,10 @@ mod tests {
         );
         assert_expr(
             "1 ~ 2 !~ 3",
-            Expr::NonMatch(
+            Expr::Match(
+                true,
                 Box::new(Expr::Match(
+                    false,
                     Box::new(Expr::Number(1.0)),
                     Box::new(Expr::Number(2.0)),
                 )),
