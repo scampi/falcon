@@ -3,9 +3,9 @@ use crate::errors::EvaluationError;
 mod arrays;
 mod expr;
 mod record;
+mod stmt;
 mod value;
 mod variables;
-mod stmt;
 
 pub struct Context {
     vars: variables::Variables,

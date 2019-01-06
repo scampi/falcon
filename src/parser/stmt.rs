@@ -444,6 +444,32 @@ mod tests {
                 )),
             ),
         );
+        assert_stmt(
+            "for (i = 0; i < 5; i++) a = a i",
+            Stmt::For(
+                Some(Box::new(Stmt::Expr(Expr::Assign(
+                    AssignType::Normal,
+                    LValueType::Name("i".to_owned()),
+                    Box::new(Expr::Number(0.0)),
+                )))),
+                Some(Expr::Comparison(
+                    CmpOperator::LessThan,
+                    Box::new(Expr::LValue(LValueType::Name("i".to_owned()))),
+                    Box::new(Expr::Number(5.0)),
+                )),
+                Some(Box::new(Stmt::Expr(Expr::PostIncrement(LValueType::Name(
+                    "i".to_owned(),
+                ))))),
+                Box::new(Stmt::Expr(Expr::Assign(
+                    AssignType::Normal,
+                    LValueType::Name("a".to_owned()),
+                    Box::new(Expr::Concat(
+                        Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
+                        Box::new(Expr::LValue(LValueType::Name("i".to_owned()))),
+                    )),
+                ))),
+            ),
+        );
     }
 
     #[test]

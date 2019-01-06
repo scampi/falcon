@@ -16,8 +16,8 @@ where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    let start = letter().or(char('_'));
-    start
+    spaces()
+        .with(letter().or(char('_')))
         .and(many::<String, _>(alpha_num().or(char('_'))))
         .map(|(start, rest)| format!("{}{}", start, rest))
         .and_then(|name: String| {
@@ -37,8 +37,8 @@ where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    let start = letter().or(char('_'));
-    start
+    spaces()
+        .with(letter().or(char('_')))
         .and(many::<String, _>(alpha_num().or(char('_'))))
         .map(|(start, rest)| format!("{}{}", start, rest))
         .and_then(|name: String| {
