@@ -112,6 +112,7 @@ parser! {
     {
         skip_wrapping_spaces(string("do"))
             .with(parse_stmt())
+            .skip(skip_wrapping_spaces(char(';')))
             .skip(skip_wrapping_spaces(string("while")))
             .and(between(
                 skip_wrapping_spaces(char('(')),
@@ -464,7 +465,7 @@ mod tests {
     #[test]
     fn do_while() {
         assert_stmt(
-            "do a++ while (a < 10)",
+            "do a++; while (a < 10)",
             Stmt::DoWhile(
                 Expr::Comparison(
                     CmpOperator::LessThan,
@@ -477,7 +478,7 @@ mod tests {
             ),
         );
         assert_stmt(
-            "do if (a == 5) break else a++ while (a < 10)",
+            "do if (a == 5) break else a++; while (a < 10)",
             Stmt::DoWhile(
                 Expr::Comparison(
                     CmpOperator::LessThan,
@@ -498,7 +499,7 @@ mod tests {
             ),
         );
         assert_stmt(
-            "do do a++ while (1) while (a < 10)",
+            "do do a++; while (1); while (a < 10)",
             Stmt::DoWhile(
                 Expr::Comparison(
                     CmpOperator::LessThan,

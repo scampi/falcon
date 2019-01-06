@@ -8,6 +8,15 @@ impl Eval for Stmt {
     type EvalResult = ();
     fn eval(&self, cxt: &mut Context) -> Result<(), EvaluationError> {
         match self {
+            Stmt::DoWhile(cond, stmt) => {
+                loop {
+                    stmt.eval(cxt)?;
+                    if !cond.eval(cxt)?.as_bool() {
+                        break;
+                    }
+                }
+                Ok(())
+            },
             Stmt::While(cond, stmt) => {
                 while cond.eval(cxt)?.as_bool() {
                     stmt.eval(cxt)?
@@ -76,5 +85,10 @@ mod tests {
 
         stmt.eval(&mut cxt).unwrap();
         assert_eq!(cxt.vars.get("a"), Value::from(6.0), "{:?}", stmt);
+
+        let stmt = get_stmt("do a += 2; while (a < 5)");
+
+        stmt.eval(&mut cxt).unwrap();
+        assert_eq!(cxt.vars.get("a"), Value::from(8.0), "{:?}", stmt);
     }
 }
