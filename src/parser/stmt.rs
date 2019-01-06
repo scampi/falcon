@@ -19,6 +19,14 @@ use combine::{
 // import macros
 use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
 
+#[cfg(test)]
+pub fn get_stmt(input: &str) -> Stmt {
+    use combine::stream::state::State;
+    let stmt = parse_stmt().easy_parse(State::new(input));
+    assert!(stmt.is_ok(), "input: {}\n{}", input, stmt.unwrap_err());
+    stmt.unwrap().0
+}
+
 parser! {
     fn parse_stmt['a, I]()(I) -> Stmt
     where [

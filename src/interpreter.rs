@@ -5,6 +5,7 @@ mod expr;
 mod record;
 mod value;
 mod variables;
+mod stmt;
 
 pub struct Context {
     vars: variables::Variables,
@@ -30,5 +31,6 @@ impl Context {
 }
 
 trait Eval {
-    fn eval(&self, cxt: &mut Context) -> Result<value::Value, EvaluationError>;
+    type EvalResult;
+    fn eval(&self, cxt: &mut Context) -> Result<Self::EvalResult, EvaluationError>;
 }

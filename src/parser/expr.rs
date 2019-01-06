@@ -285,12 +285,10 @@ parser! {
         )))
         .map(|(left_expr, rest)| {
             if let Some(rest) = rest {
-                rest.into_iter().fold(left_expr, |le, (op, re)| {
-                    match op {
+                rest.into_iter().fold(left_expr, |le, (op, re)| match op {
                     "~" => Expr::Match(false, Box::new(le), Box::new(re)),
                     "!~" => Expr::Match(true, Box::new(le), Box::new(re)),
                     _ => unreachable!(),
-                }
                 })
             } else {
                 left_expr

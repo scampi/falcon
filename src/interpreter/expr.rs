@@ -6,6 +6,7 @@ use crate::{
 use regex::Regex;
 
 impl Eval for Expr {
+    type EvalResult = Value;
     fn eval(&self, cxt: &mut Context) -> Result<Value, EvaluationError> {
         match self {
             Expr::Mod(l, r) => Ok(Value::from(
