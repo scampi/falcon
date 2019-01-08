@@ -27,10 +27,18 @@ use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
 
 #[cfg(test)]
 pub fn get_expr(input: &str) -> Expr {
-    use combine::stream::state::State;
+    use combine::stream::{state::State, Positioned};
+
     let expr = parse_expr().easy_parse(State::new(input));
     assert!(expr.is_ok(), "input: {}\n{}", input, expr.unwrap_err());
-    expr.unwrap().0
+    let expr = expr.unwrap();
+    // there is no input leftover
+    assert!(
+        input.len() < expr.1.position().column as usize,
+        "{:?}",
+        expr
+    );
+    expr.0
 }
 
 pub fn parse_expr<'a, I: 'a>() -> impl Parser<Input = I, Output = Expr> + 'a

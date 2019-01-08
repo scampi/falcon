@@ -6,10 +6,11 @@ use crate::parser::{
 use combine::{
     error::ParseError,
     parser::{
+        item::one_of,
         char::{char, string},
         choice::{choice, optional},
         combinator::attempt,
-        repeat::sep_end_by,
+        repeat::{many, skip_many},
         sequence::between,
         Parser,
     },
@@ -21,10 +22,18 @@ use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
 
 #[cfg(test)]
 pub fn get_stmt(input: &str) -> Stmt {
-    use combine::stream::state::State;
+    use combine::stream::{state::State, Positioned};
+
     let stmt = parse_stmt().easy_parse(State::new(input));
     assert!(stmt.is_ok(), "input: {}\n{}", input, stmt.unwrap_err());
-    stmt.unwrap().0
+    let stmt = stmt.unwrap();
+    // there is no input leftover
+    assert!(
+        input.len() < stmt.1.position().column as usize,
+        "{:?}",
+        stmt
+    );
+    stmt.0
 }
 
 parser! {
@@ -43,6 +52,7 @@ parser! {
             attempt(parse_for_in()),
             attempt(parse_stmt_list().map(|stmts| Stmt::Block(stmts))),
         ))
+        .skip(skip_many(one_of(" \r\n\t;".chars())))
     }
 }
 
@@ -56,7 +66,7 @@ parser! {
         between(
             skip_wrapping_spaces(char('{')),
             skip_wrapping_spaces(char('}')),
-            sep_end_by(parse_stmt(), attempt(skip_wrapping_spaces(char(';')))).map(|stmts| StmtList(stmts)),
+            many::<Vec<Stmt>, _>(parse_stmt()).map(|stmts| StmtList(stmts)),
         )
     }
 }
@@ -76,10 +86,10 @@ parser! {
                 parse_expr(),
             ),
             parse_stmt(),
-            optional(
+            attempt(optional(
                 skip_wrapping_spaces(string("else"))
                 .with(parse_stmt())
-            ),
+            )),
         )
         .map(|(_, cond, ok, ko)| Stmt::IfElse(cond, Box::new(ok), ko.map(|v| Box::new(v))))
     }
@@ -112,7 +122,6 @@ parser! {
     {
         skip_wrapping_spaces(string("do"))
             .with(parse_stmt())
-            .skip(skip_wrapping_spaces(char(';')))
             .skip(skip_wrapping_spaces(string("while")))
             .and(between(
                 skip_wrapping_spaces(char('(')),
@@ -311,7 +320,7 @@ mod tests {
             ),
         );
         assert_stmt(
-            "if (a == 1) continue else break",
+            "if (a == 1) continue; else break",
             Stmt::IfElse(
                 Expr::Comparison(
                     CmpOperator::Equal,
@@ -323,7 +332,19 @@ mod tests {
             ),
         );
         assert_stmt(
-            r#"if ( a == 1 ) 42 else "gargoyles""#,
+            "if (a == 1) continue; else break;",
+            Stmt::IfElse(
+                Expr::Comparison(
+                    CmpOperator::Equal,
+                    Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
+                    Box::new(Expr::Number(1f64)),
+                ),
+                Box::new(Stmt::Continue),
+                Some(Box::new(Stmt::Break)),
+            ),
+        );
+        assert_stmt(
+            r#"if ( a == 1 ) 42; else "gargoyles""#,
             Stmt::IfElse(
                 Expr::Comparison(
                     CmpOperator::Equal,
@@ -335,7 +356,7 @@ mod tests {
             ),
         );
         assert_stmt(
-            "if (a == 1) continue else if (a == 2) break",
+            "if (a == 1) continue; else if (a == 2) break",
             Stmt::IfElse(
                 Expr::Comparison(
                     CmpOperator::Equal,
@@ -504,7 +525,7 @@ mod tests {
             ),
         );
         assert_stmt(
-            "do if (a == 5) break else a++; while (a < 10)",
+            "do if (a == 5) break; else a++; while (a < 10)",
             Stmt::DoWhile(
                 Expr::Comparison(
                     CmpOperator::LessThan,
@@ -571,6 +592,36 @@ mod tests {
                 Stmt::Expr(Expr::Number(24f64)),
             ])),
         );
+        assert_stmt(
+            r#"{ c = c i; if (c == "21123") break; c = i c }"#,
+            Stmt::Block(StmtList(vec![
+                Stmt::Expr(Expr::Assign(
+                    AssignType::Normal,
+                    LValueType::Name("c".to_owned()),
+                    Box::new(Expr::Concat(
+                        Box::new(Expr::LValue(LValueType::Name("c".to_owned()))),
+                        Box::new(Expr::LValue(LValueType::Name("i".to_owned()))),
+                    )),
+                )),
+                Stmt::IfElse(
+                    Expr::Comparison(
+                        CmpOperator::Equal,
+                        Box::new(Expr::LValue(LValueType::Name("c".to_owned()))),
+                        Box::new(Expr::String("21123".to_owned())),
+                    ),
+                    Box::new(Stmt::Break),
+                    None,
+                ),
+                Stmt::Expr(Expr::Assign(
+                    AssignType::Normal,
+                    LValueType::Name("c".to_owned()),
+                    Box::new(Expr::Concat(
+                        Box::new(Expr::LValue(LValueType::Name("i".to_owned()))),
+                        Box::new(Expr::LValue(LValueType::Name("c".to_owned()))),
+                    )),
+                )),
+            ])),
+        );
     }
 
     #[test]
@@ -626,7 +677,7 @@ mod tests {
                 ExprList(vec![Expr::Number(42f64)]),
                 Some(OutputRedirection::Truncate(Expr::Number(2f64))),
             ),
-            " > aaa",
+            "> aaa",
         );
     }
 }
