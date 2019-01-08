@@ -23,6 +23,7 @@ impl Eval for Stmt {
                         if let Some(res) = body.eval(cxt)? {
                             match res {
                                 StmtResult::Break => break,
+                                StmtResult::Continue => (),
                                 _ => unimplemented!("{:?}", res),
                             }
                         }
@@ -37,6 +38,7 @@ impl Eval for Stmt {
                     if let Some(res) = stmt.eval(cxt)? {
                         match res {
                             StmtResult::Break => break,
+                            StmtResult::Continue => (),
                             _ => unimplemented!("{:?}", res),
                         }
                     }
@@ -51,6 +53,7 @@ impl Eval for Stmt {
                     if let Some(res) = stmt.eval(cxt)? {
                         match res {
                             StmtResult::Break => break,
+                            StmtResult::Continue => continue,
                             _ => unimplemented!("{:?}", res),
                         }
                     }
@@ -71,6 +74,7 @@ impl Eval for Stmt {
                     if let Some(res) = stmt.eval(cxt)? {
                         match res {
                             StmtResult::Break => return Ok(Some(StmtResult::Break)),
+                            StmtResult::Continue => return Ok(Some(StmtResult::Continue)),
                             _ => unimplemented!("{:?}", res),
                         }
                     }
@@ -79,6 +83,7 @@ impl Eval for Stmt {
             },
             Stmt::Expr(e) => e.eval(cxt).map(|_| None),
             Stmt::Break => Ok(Some(StmtResult::Break)),
+            Stmt::Continue => Ok(Some(StmtResult::Continue)),
             _ => unimplemented!("{:?}", self),
         }
     }
@@ -171,6 +176,30 @@ mod tests {
         assert_eq!(
             cxt.vars.get("c"),
             Value::from("2100123".to_owned()),
+            "{:?}",
+            stmt
+        );
+    }
+
+    #[test]
+    fn r#continue() {
+        let mut cxt = Context::new();
+        let stmt = get_stmt("while (a1 < 10) { a1++; if (a1 < 5) continue; a2++; }");
+        stmt.eval(&mut cxt).unwrap();
+        assert_eq!(cxt.vars.get("a1"), Value::from(10.0), "{:?}", stmt);
+        assert_eq!(cxt.vars.get("a2"), Value::from(6.0), "{:?}", stmt);
+
+        let stmt = get_stmt("do { b1++; if (b1 < 5) continue; b2++; } while (b1 < 10)");
+        stmt.eval(&mut cxt).unwrap();
+        assert_eq!(cxt.vars.get("b1"), Value::from(10.0), "{:?}", stmt);
+        assert_eq!(cxt.vars.get("b2"), Value::from(6.0), "{:?}", stmt);
+
+        let stmt =
+            get_stmt(r#"for (i = 0; i < 5; i++) { c = c i; if (c % 2 == 0) continue; c = i c }"#);
+        stmt.eval(&mut cxt).unwrap();
+        assert_eq!(
+            cxt.vars.get("c"),
+            Value::from("3101234".to_owned()),
             "{:?}",
             stmt
         );
