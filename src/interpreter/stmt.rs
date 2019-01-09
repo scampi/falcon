@@ -1,7 +1,7 @@
 use crate::{
     errors::EvaluationError,
     interpreter::{value::Value, Context, Eval},
-    parser::ast::Stmt,
+    parser::ast::{AssignType, Stmt},
 };
 
 #[derive(Debug)]
@@ -16,6 +16,22 @@ impl Eval for Stmt {
     type EvalResult = Option<StmtResult>;
     fn eval(&self, cxt: &mut Context) -> Result<Option<StmtResult>, EvaluationError> {
         match self {
+            Stmt::ForIn(var, array, body) => {
+                if let Some(keys) = cxt.arrays.keys(array) {
+                    for key in keys {
+                        cxt.vars
+                            .set(&AssignType::Normal, &var, Value::from(key.to_owned()))?;
+                        if let Some(res) = body.eval(cxt)? {
+                            match res {
+                                StmtResult::Break => break,
+                                StmtResult::Continue => (),
+                                _ => unimplemented!("{:?}", res),
+                            }
+                        }
+                    }
+                }
+                Ok(None)
+            },
             Stmt::For(init, cond, step, body) => match (init, cond, step) {
                 (Some(init), Some(cond), Some(step)) => {
                     init.eval(cxt)?;
@@ -200,6 +216,47 @@ mod tests {
         assert_eq!(
             cxt.vars.get("c"),
             Value::from("3101234".to_owned()),
+            "{:?}",
+            stmt
+        );
+    }
+
+    #[test]
+    fn for_in() {
+        let mut cxt = Context::new();
+        let stmt = get_stmt(
+            r#"{
+            a[0] = 5;
+            a[1] = 10;
+            a[2] = 15;
+            a[3] = 20;
+            for (i in a) {
+                a[i] *= 2;
+            }
+        }"#,
+        );
+        stmt.eval(&mut cxt).unwrap();
+        assert_eq!(
+            cxt.arrays.get("a", "0"),
+            Ok(Value::from(10.0)),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            cxt.arrays.get("a", "1"),
+            Ok(Value::from(20.0)),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            cxt.arrays.get("a", "2"),
+            Ok(Value::from(30.0)),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            cxt.arrays.get("a", "3"),
+            Ok(Value::from(40.0)),
             "{:?}",
             stmt
         );

@@ -17,6 +17,12 @@ impl Arrays {
         }
     }
 
+    pub fn keys(&self, name: &str) -> Option<Vec<String>> {
+        self.arrays
+            .get(name)
+            .map(|array| array.keys().map(|key| key.to_owned()).collect())
+    }
+
     pub fn get(&self, name: &str, key: &str) -> Result<Value, EvaluationError> {
         match self.arrays.get(name) {
             Some(array) => match array.get(key) {

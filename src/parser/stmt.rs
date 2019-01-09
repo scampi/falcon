@@ -6,10 +6,10 @@ use crate::parser::{
 use combine::{
     error::ParseError,
     parser::{
-        item::one_of,
         char::{char, string},
         choice::{choice, optional},
         combinator::attempt,
+        item::one_of,
         repeat::{many, skip_many},
         sequence::between,
         Parser,
@@ -22,17 +22,13 @@ use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
 
 #[cfg(test)]
 pub fn get_stmt(input: &str) -> Stmt {
-    use combine::stream::{state::State, Positioned};
+    use combine::stream::state::State;
 
     let stmt = parse_stmt().easy_parse(State::new(input));
     assert!(stmt.is_ok(), "input: {}\n{}", input, stmt.unwrap_err());
     let stmt = stmt.unwrap();
     // there is no input leftover
-    assert!(
-        input.len() < stmt.1.position().column as usize,
-        "{:?}",
-        stmt
-    );
+    assert!(stmt.1.input.is_empty(), "{:?}", stmt);
     stmt.0
 }
 
