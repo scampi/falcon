@@ -1,6 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{value::Value, Context, Eval},
+    interpreter::{arrays::Arrays, value::Value, Context, Eval},
     parser::ast::{AssignType, Stmt},
 };
 
@@ -100,6 +100,11 @@ impl Eval for Stmt {
             Stmt::Expr(e) => e.eval(cxt).map(|_| None),
             Stmt::Break => Ok(Some(StmtResult::Break)),
             Stmt::Continue => Ok(Some(StmtResult::Continue)),
+            Stmt::Delete(array, index) => {
+                let ind = Arrays::array_key(cxt, index)?;
+                cxt.arrays.delete(array, &ind);
+                Ok(None)
+            },
             _ => unimplemented!("{:?}", self),
         }
     }
@@ -257,6 +262,49 @@ mod tests {
         assert_eq!(
             cxt.arrays.get("a", "3"),
             Ok(Value::from(40.0)),
+            "{:?}",
+            stmt
+        );
+    }
+
+    #[test]
+    fn delete() {
+        let mut cxt = Context::new();
+        let stmt = get_stmt(
+            r#"{
+            a[0] = 5;
+            a[1] = 10;
+            a[2] = 15;
+            a[3] = 20;
+            for (i in a) {
+                if (a[i] < 12) {
+                    delete a[i];
+                }
+            }
+        }"#,
+        );
+        stmt.eval(&mut cxt).unwrap();
+        assert_eq!(
+            cxt.arrays.get("a", "0"),
+            Ok(Value::Uninitialised),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            cxt.arrays.get("a", "1"),
+            Ok(Value::Uninitialised),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            cxt.arrays.get("a", "2"),
+            Ok(Value::from(15.0)),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            cxt.arrays.get("a", "3"),
+            Ok(Value::from(20.0)),
             "{:?}",
             stmt
         );

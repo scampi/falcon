@@ -33,6 +33,14 @@ impl Arrays {
         }
     }
 
+    pub fn delete(&mut self, name: &str, key: &str) {
+        if let Entry::Occupied(mut entry) = self.arrays.entry(name.to_owned()) {
+            if let Entry::Occupied(entry) = entry.get_mut().entry(key.to_owned()) {
+                entry.remove_entry();
+            }
+        }
+    }
+
     pub fn set(
         &mut self,
         ty: &AssignType,
