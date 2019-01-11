@@ -5,7 +5,7 @@ use crate::parser::{
     util::{parse_func_name, parse_name, skip_wrapping_spaces},
 };
 use combine::{
-    error::ParseError,
+    error::{ParseError, StreamError},
     parser::{
         char::{char, string},
         choice::{choice, optional},
@@ -14,67 +14,104 @@ use combine::{
         sequence::between,
         Parser,
     },
-    stream::RangeStream,
+    stream::{RangeStream, StreamErrorFor},
 };
+use std::collections::HashSet;
 
-pub fn parse_program<'a, I>() -> impl Parser<Input = I, Output = Program> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str> + 'a,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    many(parse_item().skip(skip_many(one_of(" \t\r\n;".chars())))).map(|items| Program::new(items))
+// import macros
+use combine::{combine_parse_partial, combine_parser_impl, parse_mode, parser};
+
+#[cfg(test)]
+pub fn get_program(input: &str) -> Program {
+    use combine::stream::state::State;
+
+    let prog = parse_program().easy_parse(State::new(input));
+    assert!(prog.is_ok(), "input: {}\n{}", input, prog.unwrap_err());
+    let prog = prog.unwrap();
+    // there is no input leftover
+    assert!(prog.1.input.is_empty(), "{:?}", prog);
+    prog.0
 }
 
-fn parse_item<'a, I>() -> impl Parser<Input = I, Output = Item> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str> + 'a,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    choice((
-        parse_pattern()
-            .and(parse_stmt_list())
-            .map(|(pattern, action)| Item::PatternAction(pattern, action)),
-        parse_stmt_list().map(|stmts| Item::Action(stmts)),
-        parse_function_def(),
-    ))
+parser! {
+    pub fn parse_program['a, I]()(I) -> Program
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        many(parse_item().skip(skip_many(one_of(" \t\r\n;".chars())))).map(|items| Program::new(items))
+    }
 }
 
-fn parse_pattern<'a, I>() -> impl Parser<Input = I, Output = Pattern> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str> + 'a,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    choice((
-        skip_wrapping_spaces(string("BEGIN")).map(|_| Pattern::Begin),
-        skip_wrapping_spaces(string("END")).map(|_| Pattern::End),
-        parse_expr()
-            .and(optional(skip_wrapping_spaces(char(',')).with(parse_expr())))
-            .map(|(e1, e2)| {
-                if let Some(e2) = e2 {
-                    Pattern::Exprs(ExprList(vec![e1, e2]))
+parser! {
+    fn parse_item['a, I]()(I) -> Item
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        choice((
+            parse_pattern()
+                .and(parse_stmt_list())
+                .map(|(pattern, action)| Item::PatternAction(Some(pattern), action)),
+            parse_stmt_list().map(|stmts| Item::PatternAction(None, stmts)),
+            parse_function_def(),
+        ))
+    }
+}
+
+parser!{
+    fn parse_pattern['a, I]()(I) -> Pattern
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        choice((
+            skip_wrapping_spaces(string("BEGIN")).map(|_| Pattern::Begin),
+            skip_wrapping_spaces(string("END")).map(|_| Pattern::End),
+            parse_expr()
+                .and(optional(skip_wrapping_spaces(char(',')).with(parse_expr())))
+                .map(|(e1, e2)| {
+                    if let Some(e2) = e2 {
+                        Pattern::Exprs(ExprList(vec![e1, e2]))
+                    } else {
+                        Pattern::Exprs(ExprList(vec![e1]))
+                    }
+                }),
+        ))
+    }
+}
+
+parser!{
+    fn parse_function_def['a, I]()(I) -> Item
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        (
+            skip_wrapping_spaces(string("function")),
+            parse_func_name(),
+            between(
+                skip_wrapping_spaces(char('(')),
+                skip_wrapping_spaces(char(')')),
+                sep_by(parse_name(), skip_wrapping_spaces(char(','))),
+            ),
+            parse_stmt_list(),
+        )
+            .and_then(|(_, fname, args, body): (&'static str, String, Vec<String>, StmtList)| {
+                let set: HashSet<&String> = args.iter().collect();
+                if set.len() != args.len() {
+                    let msg = format!("{}", crate::errors::EvaluationError::DuplicateParams(fname));
+                    let err = StreamErrorFor::<I>::message_message(msg);
+                    Err(err)
                 } else {
-                    Pattern::Exprs(ExprList(vec![e1]))
+                    Ok(Item::FunctionDef(fname, args, body))
                 }
-            }),
-    ))
-}
-
-fn parse_function_def<'a, I>() -> impl Parser<Input = I, Output = Item> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str> + 'a,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    (
-        skip_wrapping_spaces(string("function")),
-        parse_func_name(),
-        between(
-            skip_wrapping_spaces(char('(')),
-            skip_wrapping_spaces(char(')')),
-            sep_by(parse_name(), skip_wrapping_spaces(char(','))),
-        ),
-        parse_stmt_list(),
-    )
-        .map(|(_, fname, args, body)| Item::FunctionDef(fname, args, body))
+            })
+    }
 }
 
 #[cfg(test)]
@@ -108,22 +145,24 @@ mod tests {
     fn pattern_action() {
         assert_item(
             "{ print 42 }",
-            Item::Action(StmtList(vec![Stmt::Print(
-                ExprList(vec![Expr::Number(42f64)]),
+            Item::PatternAction(
                 None,
-            )])),
+                StmtList(vec![Stmt::Print(ExprList(vec![Expr::Number(42f64)]), None)]),
+            ),
         );
         assert_item(
             "BEGIN { print 42 }",
             Item::PatternAction(
-                Pattern::Begin,
+                Some(Pattern::Begin),
                 StmtList(vec![Stmt::Print(ExprList(vec![Expr::Number(42f64)]), None)]),
             ),
         );
         assert_item(
             "/42/ { print 42 }",
             Item::PatternAction(
-                Pattern::Exprs(ExprList(vec![Expr::Regexp(RegexEq::new("42"))])),
+                Some(Pattern::Exprs(ExprList(vec![Expr::Regexp(RegexEq::new(
+                    "42",
+                ))]))),
                 StmtList(vec![Stmt::Print(ExprList(vec![Expr::Number(42f64)]), None)]),
             ),
         );
@@ -143,6 +182,12 @@ mod tests {
                 StmtList(vec![]),
             ),
         );
+
+        let input = "function my_func3(a, a) {}";
+        let prog = parse_program().easy_parse(State::new(input));
+        assert!(prog.is_err(), "input: {}\n{:?}", input, prog.unwrap());
+        let msg = format!("{}", prog.unwrap_err());
+        assert!(msg.contains("Function my_func3 has duplicate parameters"));
     }
 
     #[test]
@@ -151,14 +196,14 @@ mod tests {
             r#"BEGIN { print "start" } END { print "end" }"#,
             Program::new(vec![
                 Item::PatternAction(
-                    Pattern::Begin,
+                    Some(Pattern::Begin),
                     StmtList(vec![Stmt::Print(
                         ExprList(vec![Expr::String("start".to_owned())]),
                         None,
                     )]),
                 ),
                 Item::PatternAction(
-                    Pattern::End,
+                    Some(Pattern::End),
                     StmtList(vec![Stmt::Print(
                         ExprList(vec![Expr::String("end".to_owned())]),
                         None,
@@ -170,14 +215,14 @@ mod tests {
             r#"BEGIN { print "start" }; ; END { print "end" }"#,
             Program::new(vec![
                 Item::PatternAction(
-                    Pattern::Begin,
+                    Some(Pattern::Begin),
                     StmtList(vec![Stmt::Print(
                         ExprList(vec![Expr::String("start".to_owned())]),
                         None,
                     )]),
                 ),
                 Item::PatternAction(
-                    Pattern::End,
+                    Some(Pattern::End),
                     StmtList(vec![Stmt::Print(
                         ExprList(vec![Expr::String("end".to_owned())]),
                         None,
@@ -191,14 +236,14 @@ mod tests {
             END { print "end" }"#,
             Program::new(vec![
                 Item::PatternAction(
-                    Pattern::Begin,
+                    Some(Pattern::Begin),
                     StmtList(vec![Stmt::Print(
                         ExprList(vec![Expr::String("start".to_owned())]),
                         None,
                     )]),
                 ),
                 Item::PatternAction(
-                    Pattern::End,
+                    Some(Pattern::End),
                     StmtList(vec![Stmt::Print(
                         ExprList(vec![Expr::String("end".to_owned())]),
                         None,

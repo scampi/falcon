@@ -37,20 +37,26 @@ pub fn get_expr(input: &str) -> Expr {
     expr.0
 }
 
-pub fn parse_expr<'a, I: 'a>() -> impl Parser<Input = I, Output = Expr> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    do_parse_expr(false)
+parser!{
+    pub fn parse_expr['a, I]()(I) -> Expr
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        do_parse_expr(false)
+    }
 }
 
-pub fn parse_print_expr<'a, I: 'a>() -> impl Parser<Input = I, Output = Expr> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    do_parse_expr(true)
+parser!{
+    pub fn parse_print_expr['a, I]()(I) -> Expr
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        do_parse_expr(true)
+    }
 }
 
 parser! {

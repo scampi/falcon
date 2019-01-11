@@ -8,6 +8,8 @@ pub enum EvaluationError {
     NegativeFieldIndex(isize),
     #[fail(display = "Invalid regex: {}", _0)]
     InvalidRegex(regex::Error),
+    #[fail(display = "Function {} has duplicate parameters", _0)]
+    DuplicateParams(String),
 }
 
 #[derive(PartialEq, Debug, Fail)]

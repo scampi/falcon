@@ -23,16 +23,15 @@ impl fmt::Display for Program {
 
 #[derive(Debug, PartialEq)]
 pub enum Item {
-    Action(StmtList),
-    PatternAction(Pattern, StmtList),
+    PatternAction(Option<Pattern>, StmtList),
     FunctionDef(String, Vec<String>, StmtList),
 }
 
 impl fmt::Display for Item {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Item::Action(stmts) => write!(f, "{}", stmts),
-            Item::PatternAction(pattern, action) => write!(f, "{} {}", pattern, action),
+            Item::PatternAction(None, action) => write!(f, "{}", action),
+            Item::PatternAction(Some(pattern), action) => write!(f, "{} {}", pattern, action),
             Item::FunctionDef(name, args, stmts) => {
                 write!(f, "function {}(", name)?;
                 for arg in args {

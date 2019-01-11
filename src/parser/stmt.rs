@@ -175,106 +175,121 @@ parser! {
     }
 }
 
-fn parse_terminatable<'a, I>() -> impl Parser<Input = I, Output = Stmt> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str> + 'a,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    choice((
-        parse_simple_stmt(),
-        skip_wrapping_spaces(string("break")).map(|_| Stmt::Break),
-        skip_wrapping_spaces(string("continue")).map(|_| Stmt::Continue),
-        skip_wrapping_spaces(string("next")).map(|_| Stmt::Next),
-        skip_wrapping_spaces(string("exit"))
-            .with(optional(parse_expr()))
-            .map(|code| Stmt::Exit(code)),
-        skip_wrapping_spaces(string("return"))
-            .with(optional(parse_expr()))
-            .map(|code| Stmt::Return(code)),
-    ))
-}
-
-fn parse_simple_stmt<'a, I>() -> impl Parser<Input = I, Output = Stmt> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str> + 'a,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    choice((
-        attempt(parse_expr().map(|e| Stmt::Expr(e))),
-        attempt(parse_delete()),
-        attempt(parse_print_stmt()),
-    ))
-}
-
-fn parse_delete<'a, I>() -> impl Parser<Input = I, Output = Stmt> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str> + 'a,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    skip_wrapping_spaces(string("delete"))
-        .with(parse_name())
-        .and(between(
-            skip_wrapping_spaces(char('[')),
-            skip_wrapping_spaces(char(']')),
-            parse_expr_list1(),
+parser! {
+    fn parse_terminatable['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        choice((
+            parse_simple_stmt(),
+            skip_wrapping_spaces(string("break")).map(|_| Stmt::Break),
+            skip_wrapping_spaces(string("continue")).map(|_| Stmt::Continue),
+            skip_wrapping_spaces(string("next")).map(|_| Stmt::Next),
+            skip_wrapping_spaces(string("exit"))
+                .with(optional(parse_expr()))
+                .map(|code| Stmt::Exit(code)),
+            skip_wrapping_spaces(string("return"))
+                .with(optional(parse_expr()))
+                .map(|code| Stmt::Return(code)),
         ))
-        .map(|(name, exprs)| Stmt::Delete(name, exprs))
+    }
 }
 
-fn parse_print_stmt<'a, I>() -> impl Parser<Input = I, Output = Stmt> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str> + 'a,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    choice((
-        attempt(
-            skip_wrapping_spaces(string("printf"))
-                .with(between(
-                    skip_wrapping_spaces(char('(')),
-                    skip_wrapping_spaces(char(')')),
-                    parse_expr_list1(),
-                ))
-                .and(optional(parse_output_redirection())),
-        )
-        .map(|(exprs, redir)| Stmt::Printf(exprs, redir)),
-        attempt(
-            skip_wrapping_spaces(string("print"))
-                .with(between(
-                    skip_wrapping_spaces(char('(')),
-                    skip_wrapping_spaces(char(')')),
-                    parse_expr_list1(),
-                ))
-                .and(optional(parse_output_redirection())),
-        )
-        .map(|(exprs, redir)| Stmt::Print(exprs, redir)),
-        attempt(
-            skip_wrapping_spaces(string("printf"))
-                .with(parse_print_expr_list1())
-                .and(optional(parse_output_redirection())),
-        )
-        .map(|(exprs, redir)| Stmt::Printf(exprs, redir)),
-        attempt(
-            skip_wrapping_spaces(string("print"))
-                .with(parse_print_expr_list1())
-                .and(optional(parse_output_redirection())),
-        )
-        .map(|(exprs, redir)| Stmt::Print(exprs, redir)),
-    ))
+parser! {
+    fn parse_simple_stmt['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        choice((
+            attempt(parse_expr().map(|e| Stmt::Expr(e))),
+            attempt(parse_delete()),
+            attempt(parse_print_stmt()),
+        ))
+    }
 }
 
-fn parse_output_redirection<'a, I>() -> impl Parser<Input = I, Output = OutputRedirection> + 'a
-where
-    I: RangeStream<Item = char, Range = &'a str> + 'a,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    choice((
-        attempt(skip_wrapping_spaces(string(">>")).with(parse_print_expr()))
-            .map(|expr| OutputRedirection::Append(expr)),
-        attempt(skip_wrapping_spaces(char('>')).with(parse_print_expr()))
-            .map(|expr| OutputRedirection::Truncate(expr)),
-        attempt(skip_wrapping_spaces(char('|')).with(parse_print_expr()))
-            .map(|expr| OutputRedirection::Pipe(expr)),
-    ))
+parser! {
+    fn parse_delete['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        skip_wrapping_spaces(string("delete"))
+            .with(parse_name())
+            .and(between(
+                skip_wrapping_spaces(char('[')),
+                skip_wrapping_spaces(char(']')),
+                parse_expr_list1(),
+            ))
+            .map(|(name, exprs)| Stmt::Delete(name, exprs))
+    }
+}
+
+parser! {
+    fn parse_print_stmt['a, I]()(I) -> Stmt
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        choice((
+            attempt(
+                skip_wrapping_spaces(string("printf"))
+                    .with(between(
+                        skip_wrapping_spaces(char('(')),
+                        skip_wrapping_spaces(char(')')),
+                        parse_expr_list1(),
+                    ))
+                    .and(optional(parse_output_redirection())),
+            )
+            .map(|(exprs, redir)| Stmt::Printf(exprs, redir)),
+            attempt(
+                skip_wrapping_spaces(string("print"))
+                    .with(between(
+                        skip_wrapping_spaces(char('(')),
+                        skip_wrapping_spaces(char(')')),
+                        parse_expr_list1(),
+                    ))
+                    .and(optional(parse_output_redirection())),
+            )
+            .map(|(exprs, redir)| Stmt::Print(exprs, redir)),
+            attempt(
+                skip_wrapping_spaces(string("printf"))
+                    .with(parse_print_expr_list1())
+                    .and(optional(parse_output_redirection())),
+            )
+            .map(|(exprs, redir)| Stmt::Printf(exprs, redir)),
+            attempt(
+                skip_wrapping_spaces(string("print"))
+                    .with(parse_print_expr_list1())
+                    .and(optional(parse_output_redirection())),
+            )
+            .map(|(exprs, redir)| Stmt::Print(exprs, redir)),
+        ))
+    }
+}
+
+parser! {
+    fn parse_output_redirection['a, I]()(I) -> OutputRedirection
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        choice((
+            attempt(skip_wrapping_spaces(string(">>")).with(parse_print_expr()))
+                .map(|expr| OutputRedirection::Append(expr)),
+            attempt(skip_wrapping_spaces(char('>')).with(parse_print_expr()))
+                .map(|expr| OutputRedirection::Truncate(expr)),
+            attempt(skip_wrapping_spaces(char('|')).with(parse_print_expr()))
+                .map(|expr| OutputRedirection::Pipe(expr)),
+        ))
+    }
 }
 
 #[cfg(test)]
