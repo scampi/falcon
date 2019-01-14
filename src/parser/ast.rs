@@ -3,7 +3,7 @@ use std::fmt;
 
 #[derive(Debug, PartialEq)]
 pub struct Program {
-    items: Vec<Item>,
+    pub items: Vec<Item>,
 }
 
 impl Program {
@@ -204,6 +204,12 @@ impl fmt::Display for ExprList {
             write!(formatter, "{}, ", expr)?;
         }
         Ok(())
+    }
+}
+
+impl ExprList {
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 

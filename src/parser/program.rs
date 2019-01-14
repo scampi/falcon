@@ -2,7 +2,7 @@ use crate::parser::{
     ast::*,
     expr::*,
     stmt::*,
-    util::{parse_func_name, parse_name, skip_wrapping_spaces},
+    util::{is_special_variable, parse_func_name, parse_name, skip_wrapping_spaces},
 };
 use combine::{
     error::{ParseError, StreamError},
@@ -61,7 +61,7 @@ parser! {
     }
 }
 
-parser!{
+parser! {
     fn parse_pattern['a, I]()(I) -> Pattern
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
@@ -84,7 +84,7 @@ parser!{
     }
 }
 
-parser!{
+parser! {
     fn parse_function_def['a, I]()(I) -> Item
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
@@ -104,7 +104,11 @@ parser!{
             .and_then(|(_, fname, args, body): (&'static str, String, Vec<String>, StmtList)| {
                 let set: HashSet<&String> = args.iter().collect();
                 if set.len() != args.len() {
-                    let msg = format!("{}", crate::errors::EvaluationError::DuplicateParams(fname));
+                    let msg = format!("{}", crate::errors::ParseError::DuplicateParams(fname));
+                    let err = StreamErrorFor::<I>::message_message(msg);
+                    Err(err)
+                } else if args.iter().any(|arg| is_special_variable(arg)) {
+                    let msg = format!("{}", crate::errors::ParseError::SpecialVariableAsParameter);
                     let err = StreamErrorFor::<I>::message_message(msg);
                     Err(err)
                 } else {
@@ -188,6 +192,12 @@ mod tests {
         assert!(prog.is_err(), "input: {}\n{:?}", input, prog.unwrap());
         let msg = format!("{}", prog.unwrap_err());
         assert!(msg.contains("Function my_func3 has duplicate parameters"));
+
+        let input = "function my_func4(FS) {}";
+        let prog = parse_program().easy_parse(State::new(input));
+        assert!(prog.is_err(), "input: {}\n{:?}", input, prog.unwrap());
+        let msg = format!("{}", prog.unwrap_err());
+        assert!(msg.contains("Cannot use a special variable as a function parameter"));
     }
 
     #[test]

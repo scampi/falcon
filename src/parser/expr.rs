@@ -37,7 +37,7 @@ pub fn get_expr(input: &str) -> Expr {
     expr.0
 }
 
-parser!{
+parser! {
     pub fn parse_expr['a, I]()(I) -> Expr
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
@@ -48,7 +48,7 @@ parser!{
     }
 }
 
-parser!{
+parser! {
     pub fn parse_print_expr['a, I]()(I) -> Expr
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,

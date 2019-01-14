@@ -118,6 +118,13 @@ where
     spaces().with(p.skip(spaces()))
 }
 
+pub fn is_special_variable(name: &str) -> bool {
+    match name {
+        "FNR" | "FS" | "NF" | "NR" | "SUBSEP" => true,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
