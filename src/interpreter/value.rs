@@ -4,143 +4,144 @@ use crate::{
 };
 use std::{collections::HashMap, fmt};
 
-#[derive(Debug)]
-pub enum VariableValue {
-    Uninitialised,
-    Scalar(ExprValue),
-    Array(HashMap<String, ExprValue>),
-}
-
 #[derive(Clone, Debug, PartialEq)]
-pub enum ExprValue {
+pub enum Value {
     Uninitialised,
     Bool(bool),
     Number(f64),
     String(String),
+    Array(HashMap<String, Value>),
 }
 
-impl From<f64> for ExprValue {
-    fn from(value: f64) -> ExprValue {
-        ExprValue::Number(value)
+impl From<f64> for Value {
+    fn from(value: f64) -> Value {
+        Value::Number(value)
     }
 }
 
-impl From<usize> for ExprValue {
-    fn from(value: usize) -> ExprValue {
-        ExprValue::Number(value as f64)
+impl From<usize> for Value {
+    fn from(value: usize) -> Value {
+        Value::Number(value as f64)
     }
 }
 
-impl From<i32> for ExprValue {
-    fn from(value: i32) -> ExprValue {
-        ExprValue::Number(value as f64)
+impl From<i32> for Value {
+    fn from(value: i32) -> Value {
+        Value::Number(value as f64)
     }
 }
 
-impl From<bool> for ExprValue {
-    fn from(value: bool) -> ExprValue {
-        ExprValue::Bool(value)
+impl From<bool> for Value {
+    fn from(value: bool) -> Value {
+        Value::Bool(value)
     }
 }
 
-impl From<String> for ExprValue {
-    fn from(value: String) -> ExprValue {
-        ExprValue::String(value)
+impl From<String> for Value {
+    fn from(value: String) -> Value {
+        Value::String(value)
     }
 }
 
-impl fmt::Display for ExprValue {
+impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ExprValue::Uninitialised => Ok(()),
-            ExprValue::Number(n) => write!(f, "{}", n),
-            ExprValue::String(s) => write!(f, "{}", s),
-            ExprValue::Bool(b) => {
+            Value::Uninitialised => Ok(()),
+            Value::Number(n) => write!(f, "{}", n),
+            Value::String(s) => write!(f, "{}", s),
+            Value::Bool(b) => {
                 if *b {
                     write!(f, "1")
                 } else {
                     write!(f, "0")
                 }
             },
+            Value::Array(_) => unreachable!(),
         }
     }
 }
 
-impl ExprValue {
+impl Value {
+    pub fn is_scalar(&self) -> bool {
+        match self {
+            Value::Bool(_) | Value::String(_) | Value::Number(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn as_string(&self) -> String {
         match self {
-            ExprValue::Uninitialised => String::new(),
-            ExprValue::Bool(v) => String::from(if *v { "1" } else { "0" }),
-            ExprValue::String(s) => s.to_string(),
-            ExprValue::Number(n) => n.to_string(),
+            Value::Array(..) => unreachable!(),
+            Value::Uninitialised => String::new(),
+            Value::Bool(v) => String::from(if *v { "1" } else { "0" }),
+            Value::String(s) => s.to_string(),
+            Value::Number(n) => n.to_string(),
         }
     }
 
     pub fn as_bool(&self) -> bool {
         match self {
-            ExprValue::Uninitialised => false,
-            ExprValue::Bool(v) => *v,
-            ExprValue::String(s) => !s.is_empty(),
-            ExprValue::Number(n) => *n != 0.0,
+            Value::Array(..) => unreachable!(),
+            Value::Uninitialised => false,
+            Value::Bool(v) => *v,
+            Value::String(s) => !s.is_empty(),
+            Value::Number(n) => *n != 0.0,
         }
     }
 
     pub fn as_number(&self) -> f64 {
         match self {
-            ExprValue::Uninitialised => 0.0,
-            ExprValue::Bool(v) => {
+            Value::Array(..) => unreachable!(),
+            Value::Uninitialised => 0.0,
+            Value::Bool(v) => {
                 if *v {
                     1.0
                 } else {
                     0.0
                 }
             },
-            ExprValue::String(s) => match s.parse::<f64>() {
+            Value::String(s) => match s.parse::<f64>() {
                 Ok(n) => n,
                 Err(_) => 0.0,
             },
-            ExprValue::Number(n) => *n,
+            Value::Number(n) => *n,
         }
     }
 
-    pub fn compare(op: &CmpOperator, a: &ExprValue, b: &ExprValue) -> ExprValue {
+    pub fn compare(op: &CmpOperator, a: &Value, b: &Value) -> Value {
         let res = match (a, b) {
-            (ExprValue::Number(a), ExprValue::Number(b)) => op.compare(a, b),
-            (ExprValue::Number(a), ExprValue::String(b)) => match b.parse::<f64>() {
+            (Value::Number(a), Value::Number(b)) => op.compare(a, b),
+            (Value::Number(a), Value::String(b)) => match b.parse::<f64>() {
                 Ok(num) => op.compare(a, &num),
                 Err(_) => op.compare(&a.to_string(), b),
             },
-            (ExprValue::String(a), ExprValue::Number(b)) => match a.parse::<f64>() {
+            (Value::String(a), Value::Number(b)) => match a.parse::<f64>() {
                 Ok(num) => op.compare(&num, b),
                 Err(_) => op.compare(a, &b.to_string()),
             },
-            (ExprValue::Number(a), ExprValue::Uninitialised) => op.compare(a, &0.0),
-            (ExprValue::Uninitialised, ExprValue::Number(b)) => op.compare(&0.0, b),
-            (ExprValue::Uninitialised, ExprValue::Uninitialised) => op.compare(&0.0, &0.0),
-            (ExprValue::String(a), ExprValue::String(b)) => op.compare(a, b),
+            (Value::Number(a), Value::Uninitialised) => op.compare(a, &0.0),
+            (Value::Uninitialised, Value::Number(b)) => op.compare(&0.0, b),
+            (Value::Uninitialised, Value::Uninitialised) => op.compare(&0.0, &0.0),
+            (Value::String(a), Value::String(b)) => op.compare(a, b),
             _ => unreachable!(),
         };
-        ExprValue::Bool(res)
+        Value::Bool(res)
     }
 
-    pub fn compute(
-        op: &AssignType,
-        a: ExprValue,
-        b: ExprValue,
-    ) -> Result<ExprValue, EvaluationError> {
+    pub fn compute(op: &AssignType, a: Value, b: Value) -> Result<Value, EvaluationError> {
         match op {
-            AssignType::Pow => Ok(ExprValue::from(a.as_number().powf(b.as_number()))),
-            AssignType::Mod => Ok(ExprValue::from(a.as_number() % b.as_number())),
-            AssignType::Mul => Ok(ExprValue::from(a.as_number() * b.as_number())),
+            AssignType::Pow => Ok(Value::from(a.as_number().powf(b.as_number()))),
+            AssignType::Mod => Ok(Value::from(a.as_number() % b.as_number())),
+            AssignType::Mul => Ok(Value::from(a.as_number() * b.as_number())),
             AssignType::Div => {
                 let bnum = b.as_number();
                 if bnum == 0.0 {
                     return Err(EvaluationError::DivisionByZero);
                 }
-                Ok(ExprValue::from(a.as_number() / bnum))
+                Ok(Value::from(a.as_number() / bnum))
             },
-            AssignType::Add => Ok(ExprValue::from(a.as_number() + b.as_number())),
-            AssignType::Sub => Ok(ExprValue::from(a.as_number() - b.as_number())),
+            AssignType::Add => Ok(Value::from(a.as_number() + b.as_number())),
+            AssignType::Sub => Ok(Value::from(a.as_number() - b.as_number())),
             AssignType::Normal => Ok(b),
         }
     }

@@ -8,15 +8,15 @@ mod stmt;
 mod value;
 mod variables;
 
-pub struct Context<'a> {
+pub struct Runtime<'a> {
     vars: variables::Variables,
     record: record::Record,
     funcs: functions::Functions<'a>,
 }
 
-impl<'a> Context<'a> {
-    fn new() -> Context<'a> {
-        Context {
+impl<'a> Runtime<'a> {
+    fn new() -> Runtime<'a> {
+        Runtime {
             vars: variables::Variables::new(),
             record: record::Record::new(),
             funcs: functions::Functions::new(),
@@ -42,12 +42,19 @@ impl<'a> Context<'a> {
     }
 }
 
+#[derive(Copy, Clone)]
+pub enum Context {
+    Scalar,
+    FunctionArgs,
+}
+
 trait Eval {
     type EvalResult;
     fn eval(
         &self,
+        cxt: Context,
         vars: &mut variables::Variables,
         record: &mut record::Record,
-        funcs: &mut functions::Functions,
+        funcs: &functions::Functions,
     ) -> Result<Self::EvalResult, EvaluationError>;
 }
