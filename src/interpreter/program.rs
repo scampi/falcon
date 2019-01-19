@@ -75,17 +75,14 @@ mod tests {
     }
 
     #[test]
-    fn custom_functions() {
+    fn custom_functions_scalar() {
         let mut cxt = Context::new();
 
         // update a global variable
         let prog = get_program("function adder(var) { a += var } { a = 42; adder(2); }");
         cxt.load_program(&prog).unwrap();
         eval_program(&prog, &mut cxt).unwrap();
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(44))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(44)));
 
         // initialize a global variable and mutate a local variable with the same name
         // as a global variable
@@ -93,14 +90,8 @@ mod tests {
         let prog = get_program("function adder(a) { a += 10; b = a; } { a = 1; adder(5); }");
         cxt.load_program(&prog).unwrap();
         eval_program(&prog, &mut cxt).unwrap();
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(1))
-        );
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", None),
-            Ok(ExprValue::from(15))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(1)));
+        assert_eq!(cxt.vars.get("b", None), Ok(ExprValue::from(15)));
 
         // assign return value of a function
         cxt.clean();
@@ -111,14 +102,8 @@ mod tests {
         );
         cxt.load_program(&prog).unwrap();
         eval_program(&prog, &mut cxt).unwrap();
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::Uninitialised)
-        );
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", None),
-            Ok(ExprValue::from(25))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::Uninitialised));
+        assert_eq!(cxt.vars.get("b", None), Ok(ExprValue::from(25)));
 
         // ensure function-locality of variables
         cxt.clean();
@@ -129,24 +114,15 @@ mod tests {
         );
         cxt.load_program(&prog).unwrap();
         eval_program(&prog, &mut cxt).unwrap();
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", None),
-            Ok(ExprValue::from(11))
-        );
+        assert_eq!(cxt.vars.get("b", None), Ok(ExprValue::from(11)));
 
         // declare the variable "b" scoped to the function
         cxt.clean();
         let prog = get_program("function adder(a, b) { a += 10; b = a; } { a = 1; adder(5); }");
         cxt.load_program(&prog).unwrap();
         eval_program(&prog, &mut cxt).unwrap();
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(1))
-        );
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", None),
-            Ok(ExprValue::Uninitialised)
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(1)));
+        assert_eq!(cxt.vars.get("b", None), Ok(ExprValue::Uninitialised));
 
         // call another function from a function to verify locals are properly handled
         cxt.clean();
@@ -157,10 +133,7 @@ mod tests {
         );
         cxt.load_program(&prog).unwrap();
         eval_program(&prog, &mut cxt).unwrap();
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(20))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(20)));
 
         // variable local to a function should be overridden if used in loop
         cxt.clean();
@@ -174,9 +147,57 @@ mod tests {
         );
         cxt.load_program(&prog).unwrap();
         eval_program(&prog, &mut cxt).unwrap();
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(10))
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(10)));
+    }
+
+    #[test]
+    fn custom_functions_arrays() {
+        let mut cxt = Context::new();
+
+        // update global array
+        let prog = get_program("function adder(var) { a[0] += var } { a[0] = 42; adder(2); }");
+        cxt.load_program(&prog).unwrap();
+        eval_program(&prog, &mut cxt).unwrap();
+        assert_eq!(cxt.vars.get("a", Some("0")), Ok(ExprValue::from(44)));
+
+        // update local array
+        cxt.clean();
+        let prog = get_program(
+            r#"
+            function join(a, b, c, arr) {
+                arr[0] = a;
+                arr[1] = b;
+                for (i in arr) {
+                    c += arr[i];
+                }
+                return c;
+            }
+            { result = join(3, 5); }
+            "#,
         );
+        cxt.load_program(&prog).unwrap();
+        eval_program(&prog, &mut cxt).unwrap();
+        assert_eq!(cxt.vars.get("result", None), Ok(ExprValue::from(8)));
+
+        // pass array as argument
+        cxt.clean();
+        let prog = get_program(
+            r#"
+            function join(arr, c) {
+                for (i in arr) {
+                    c = arr[i] ", ";
+                }
+                return c;
+            }
+            { 
+                my_array[0] = 5;
+                my_array[1] = 6;
+                result = join(my_array);
+            }
+            "#,
+        );
+        cxt.load_program(&prog).unwrap();
+        eval_program(&prog, &mut cxt).unwrap();
+        assert_eq!(cxt.vars.get("result", None), Ok(ExprValue::from(11)));
     }
 }

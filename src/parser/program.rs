@@ -40,7 +40,9 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        many(parse_item().skip(skip_many(one_of(" \t\r\n;".chars())))).map(|items| Program::new(items))
+        let seps1 = skip_many(one_of(" \t\r\n;".chars()));
+        let seps2 = skip_many(one_of(" \t\r\n;".chars()));
+        many(seps1.with(parse_item().skip(seps2))).map(|items| Program::new(items))
     }
 }
 

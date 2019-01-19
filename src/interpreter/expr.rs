@@ -91,33 +91,33 @@ impl Eval for Expr {
                 }
             },
             Expr::LValue(lvalue) => match lvalue {
-                LValueType::Name(name) => vars.get(funcs, name, None),
+                LValueType::Name(name) => vars.get(name, None),
                 LValueType::Dollar(e) => {
                     let index = e.eval(vars, record, funcs)?.as_number() as isize;
                     record.get(index)
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    vars.get(funcs, name, Some(&key_str))
+                    vars.get(name, Some(&key_str))
                 },
             },
             Expr::Assign(ty, lvalue, rvalue) => {
                 let new_value = rvalue.eval(vars, record, funcs)?;
                 match lvalue {
-                    LValueType::Name(name) => vars.set(funcs, ty, name, None, new_value),
+                    LValueType::Name(name) => vars.set(ty, name, None, new_value),
                     LValueType::Dollar(e) => {
                         let index = e.eval(vars, record, funcs)?.as_number() as isize;
                         record.set(vars, ty, index, new_value)
                     },
                     LValueType::Brackets(name, key) => {
                         let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                        vars.set(funcs, ty, name, Some(&key_str), new_value)
+                        vars.set(ty, name, Some(&key_str), new_value)
                     },
                 }
             },
             Expr::PreIncrement(lvalue) => match lvalue {
                 LValueType::Name(name) => {
-                    vars.set(funcs, &AssignType::Add, name, None, ExprValue::from(1))
+                    vars.set(&AssignType::Add, name, None, ExprValue::from(1))
                 },
                 LValueType::Dollar(e) => {
                     let index = e.eval(vars, record, funcs)?.as_number() as isize;
@@ -125,18 +125,12 @@ impl Eval for Expr {
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    vars.set(
-                        funcs,
-                        &AssignType::Add,
-                        name,
-                        Some(&key_str),
-                        ExprValue::from(1),
-                    )
+                    vars.set(&AssignType::Add, name, Some(&key_str), ExprValue::from(1))
                 },
             },
             Expr::PreDecrement(lvalue) => match lvalue {
                 LValueType::Name(name) => {
-                    vars.set(funcs, &AssignType::Sub, name, None, ExprValue::from(1))
+                    vars.set(&AssignType::Sub, name, None, ExprValue::from(1))
                 },
                 LValueType::Dollar(e) => {
                     let index = e.eval(vars, record, funcs)?.as_number() as isize;
@@ -144,19 +138,13 @@ impl Eval for Expr {
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    vars.set(
-                        funcs,
-                        &AssignType::Sub,
-                        name,
-                        Some(&key_str),
-                        ExprValue::from(1),
-                    )
+                    vars.set(&AssignType::Sub, name, Some(&key_str), ExprValue::from(1))
                 },
             },
             Expr::PostIncrement(lvalue) => match lvalue {
                 LValueType::Name(name) => {
-                    let value = vars.get(funcs, name, None);
-                    vars.set(funcs, &AssignType::Add, name, None, ExprValue::from(1))?;
+                    let value = vars.get(name, None);
+                    vars.set(&AssignType::Add, name, None, ExprValue::from(1))?;
                     value
                 },
                 LValueType::Dollar(e) => {
@@ -167,21 +155,15 @@ impl Eval for Expr {
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    let value = vars.get(funcs, name, Some(&key_str));
-                    vars.set(
-                        funcs,
-                        &AssignType::Add,
-                        name,
-                        Some(&key_str),
-                        ExprValue::from(1),
-                    )?;
+                    let value = vars.get(name, Some(&key_str));
+                    vars.set(&AssignType::Add, name, Some(&key_str), ExprValue::from(1))?;
                     value
                 },
             },
             Expr::PostDecrement(lvalue) => match lvalue {
                 LValueType::Name(name) => {
-                    let value = vars.get(funcs, name, None);
-                    vars.set(funcs, &AssignType::Sub, name, None, ExprValue::from(1))?;
+                    let value = vars.get(name, None);
+                    vars.set(&AssignType::Sub, name, None, ExprValue::from(1))?;
                     value
                 },
                 LValueType::Dollar(e) => {
@@ -192,14 +174,8 @@ impl Eval for Expr {
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    let value = vars.get(funcs, name, Some(&key_str));
-                    vars.set(
-                        funcs,
-                        &AssignType::Sub,
-                        name,
-                        Some(&key_str),
-                        ExprValue::from(1),
-                    )?;
+                    let value = vars.get(name, Some(&key_str));
+                    vars.set(&AssignType::Sub, name, Some(&key_str), ExprValue::from(1))?;
                     value
                 },
             },
@@ -456,10 +432,7 @@ mod tests {
         let expr = get_expr("nf");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::Uninitialised);
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "nf", None),
-            Ok(ExprValue::Uninitialised)
-        );
+        assert_eq!(cxt.vars.get("nf", None), Ok(ExprValue::Uninitialised));
     }
 
     #[test]
@@ -469,25 +442,19 @@ mod tests {
         let expr = get_expr("a[0]");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::Uninitialised);
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("0")),
-            Ok(ExprValue::Uninitialised)
-        );
+        assert_eq!(cxt.vars.get("a", Some("0")), Ok(ExprValue::Uninitialised));
 
         let expr = get_expr("b[0,1,2]");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::Uninitialised);
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", Some("012")),
-            Ok(ExprValue::Uninitialised)
-        );
+        assert_eq!(cxt.vars.get("b", Some("012")), Ok(ExprValue::Uninitialised));
 
         cxt.vars.subsep = String::from("#");
         let expr = get_expr("b[0,1,2]");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::Uninitialised);
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", Some("0#1#2")),
+            cxt.vars.get("b", Some("0#1#2")),
             Ok(ExprValue::Uninitialised)
         );
     }
@@ -499,78 +466,51 @@ mod tests {
         let expr = get_expr("a = 42");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(42));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(42))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(42)));
 
         let expr = get_expr("a = b = 5");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(5));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(5))
-        );
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", None),
-            Ok(ExprValue::from(5))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(5)));
+        assert_eq!(cxt.vars.get("b", None), Ok(ExprValue::from(5)));
 
         let expr = get_expr("a ^= 2");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(25));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(25))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(25)));
 
         let expr = get_expr("a = 2 + 3");
         eval_expr(&expr, &mut cxt).unwrap();
         let expr = get_expr("a *= 2");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(10));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(10))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(10)));
 
         let expr = get_expr("a = 2 + 3");
         eval_expr(&expr, &mut cxt).unwrap();
         let expr = get_expr("a /= 2");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(2.5));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(2.5))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(2.5)));
 
         let expr = get_expr("a = 2 + 3");
         eval_expr(&expr, &mut cxt).unwrap();
         let expr = get_expr("a -= 2");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(3));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(3))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(3)));
 
         let expr = get_expr("a = 2 + 3");
         eval_expr(&expr, &mut cxt).unwrap();
         let expr = get_expr("a %= 2");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(1));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(1))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(1)));
 
         let expr = get_expr("c /= 2");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(0));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "c", None),
-            Ok(ExprValue::from(0))
-        );
+        assert_eq!(cxt.vars.get("c", None), Ok(ExprValue::from(0)));
 
         let expr = get_expr(r#"FS = "@""#);
         let res = eval_expr(&expr, &mut cxt);
@@ -673,30 +613,18 @@ mod tests {
         let expr = get_expr("a[0] = 42");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(42));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("0")),
-            Ok(ExprValue::from(42))
-        );
+        assert_eq!(cxt.vars.get("a", Some("0")), Ok(ExprValue::from(42)));
 
         let expr = get_expr("a[0] /= 2");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(21));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("0")),
-            Ok(ExprValue::from(21))
-        );
+        assert_eq!(cxt.vars.get("a", Some("0")), Ok(ExprValue::from(21)));
 
         let expr = get_expr("a[1] = 5");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(5));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("1")),
-            Ok(ExprValue::from(5))
-        );
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("0")),
-            Ok(ExprValue::from(21))
-        );
+        assert_eq!(cxt.vars.get("a", Some("1")), Ok(ExprValue::from(5)));
+        assert_eq!(cxt.vars.get("a", Some("0")), Ok(ExprValue::from(21)));
     }
 
     #[test]
@@ -721,18 +649,12 @@ mod tests {
         let expr = get_expr("++a");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(16));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(16))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(16)));
         // preincrement an array element
         let expr = get_expr("++b[0]");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(1));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", Some("0")),
-            Ok(ExprValue::from(1))
-        );
+        assert_eq!(cxt.vars.get("b", Some("0")), Ok(ExprValue::from(1)));
         // preincrement a field value
         cxt.set_next_record("10".to_owned());
         let expr = get_expr("++$1");
@@ -751,18 +673,12 @@ mod tests {
         let expr = get_expr("a++");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(15));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(16))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(16)));
         // postincrement an array element
         let expr = get_expr("b[0]++");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::Uninitialised);
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", Some("0")),
-            Ok(ExprValue::from(1))
-        );
+        assert_eq!(cxt.vars.get("b", Some("0")), Ok(ExprValue::from(1)));
         // postincrement a field value
         cxt.set_next_record("10".to_owned());
         let expr = get_expr("$1++");
@@ -781,18 +697,12 @@ mod tests {
         let expr = get_expr("--a");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(14));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(14))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(14)));
         // preincrement an array element
         let expr = get_expr("--b[0]");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(-1));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", Some("0")),
-            Ok(ExprValue::from(-1))
-        );
+        assert_eq!(cxt.vars.get("b", Some("0")), Ok(ExprValue::from(-1)));
         // preincrement a field value
         cxt.set_next_record("10".to_owned());
         let expr = get_expr("--$1");
@@ -811,18 +721,12 @@ mod tests {
         let expr = get_expr("a--");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::from(15));
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
-            Ok(ExprValue::from(14))
-        );
+        assert_eq!(cxt.vars.get("a", None), Ok(ExprValue::from(14)));
         // postincrement an array element
         let expr = get_expr("b[0]--");
         let res = eval_expr(&expr, &mut cxt);
         assert_eq!(res.unwrap(), ExprValue::Uninitialised);
-        assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", Some("0")),
-            Ok(ExprValue::from(-1))
-        );
+        assert_eq!(cxt.vars.get("b", Some("0")), Ok(ExprValue::from(-1)));
         // postincrement a field value
         cxt.set_next_record("10".to_owned());
         let expr = get_expr("$1--");

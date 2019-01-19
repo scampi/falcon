@@ -7,64 +7,25 @@ use crate::{
         variables::Variables,
         Eval,
     },
-    parser::ast::{AssignType, ExprList, Item, Program},
+    parser::ast::{ExprList, Item, Program},
 };
 use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Debug)]
 pub struct Functions<'a> {
     funcs: HashMap<String, &'a Item>,
-    locals: Vec<HashMap<String, VariableValue>>,
 }
 
 impl<'a> Functions<'a> {
     pub fn new() -> Functions<'a> {
         Functions {
             funcs: HashMap::new(),
-            locals: Vec::new(),
         }
     }
 
     #[cfg(test)]
     pub fn clean(&mut self) {
         self.funcs.clear();
-        self.locals.clear();
-    }
-
-    pub fn is_local_var(&self, name: &str) -> bool {
-        if let Some(locals) = self.locals.last() {
-            locals.contains_key(name)
-        } else {
-            false
-        }
-    }
-
-    pub fn get_local_var(
-        &self,
-        name: &str,
-        subscript: Option<&str>,
-    ) -> Result<ExprValue, EvaluationError> {
-        if let Some(locals) = self.locals.last() {
-            Variables::get_var(locals, name, subscript)
-        } else {
-            // should have been checked with #is_local_var
-            unreachable!()
-        }
-    }
-
-    pub fn set_local_var(
-        &mut self,
-        ty: &AssignType,
-        name: &str,
-        subscript: Option<&str>,
-        new_value: ExprValue,
-    ) -> Result<ExprValue, EvaluationError> {
-        if let Some(locals) = self.locals.last_mut() {
-            Variables::set_var(locals, ty, name, subscript, new_value)
-        } else {
-            // should have been checked with #is_local_var
-            unreachable!()
-        }
     }
 
     pub fn load_functions(&mut self, prog: &'a Program) -> Result<(), EvaluationError> {
@@ -100,22 +61,22 @@ impl<'a> Functions<'a> {
                     ));
                 }
                 // setup local variables
+
+                // evaluate the arguments with the current stack, then push in
+                // a new one for this call.
+                let args_iter = args.eval(vars, record, self)?.into_iter();
+                vars.push_local_stack();
+
                 let mut params_iter = params.iter();
-                let mut locals = HashMap::new();
                 // The iterator for args needs to be called first since it may be shorter than
                 // params. Zip will short-circuit and not call next on params_iter if args is
                 // smaller. This allows to fill the locals map with any remaining params.
-                for (arg, param) in args
-                    .eval(vars, record, self)?
-                    .into_iter()
-                    .zip(params_iter.by_ref())
-                {
-                    locals.insert(param.to_owned(), VariableValue::Scalar(arg));
+                for (arg, param) in args_iter.zip(params_iter.by_ref()) {
+                    vars.init_local_var(param.to_owned(), VariableValue::Scalar(arg));
                 }
                 for param in params_iter {
-                    locals.insert(param.to_owned(), VariableValue::Uninitialised);
+                    vars.init_local_var(param.to_owned(), VariableValue::Uninitialised);
                 }
-                self.locals.push(locals);
                 // execute the function
                 let mut ret = ExprValue::Uninitialised;
                 for stmt in &stmts.0 {
@@ -130,9 +91,7 @@ impl<'a> Functions<'a> {
                     }
                 }
                 // cleanup local variables
-                if self.locals.pop().is_none() {
-                    unreachable!()
-                }
+                vars.pop_local_stack();
                 Ok(ret)
             },
             _ => Err(EvaluationError::UnknownFunction(name.to_owned())),

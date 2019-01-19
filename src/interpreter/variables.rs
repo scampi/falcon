@@ -1,9 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{
-        functions::Functions,
-        value::{ExprValue, VariableValue},
-    },
+    interpreter::value::{ExprValue, VariableValue},
     parser::ast::AssignType,
 };
 use std::collections::{hash_map::Entry, HashMap};
@@ -11,6 +8,7 @@ use std::collections::{hash_map::Entry, HashMap};
 #[derive(Debug)]
 pub struct Variables {
     vars: HashMap<String, VariableValue>,
+    locals: Vec<HashMap<String, VariableValue>>,
     ///// The number of arguments
     //argc: usize,
     ///// The command line arguments
@@ -40,6 +38,7 @@ impl Variables {
     pub fn new() -> Variables {
         Variables {
             vars: HashMap::new(),
+            locals: Vec::new(),
             fnr: 0,
             fs: String::from(" "),
             nf: 0,
@@ -56,6 +55,7 @@ impl Variables {
     #[cfg(test)]
     pub fn clean(&mut self) {
         self.vars.clear();
+        self.locals.clear();
         self.fnr = 0;
         self.nr = 0;
         self.subsep.clear();
@@ -63,13 +63,37 @@ impl Variables {
         self.fs.push_str(" ");
     }
 
+    pub fn init_local_var(&mut self, name: String, value: VariableValue) {
+        if let Some(locals) = self.locals.last_mut() {
+            locals.insert(name, value);
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub fn push_local_stack(&mut self) {
+        self.locals.push(HashMap::new());
+    }
+
+    pub fn pop_local_stack(&mut self) {
+        if self.locals.pop().is_none() {
+            unreachable!()
+        }
+    }
+
     pub fn array_keys(&self, name: &str) -> Result<Vec<String>, EvaluationError> {
-        if let Some(value) = self.vars.get(name) {
-            match value {
-                VariableValue::Uninitialised => Ok(Vec::new()),
-                VariableValue::Array(array) => Ok(array.keys().map(|key| key.to_owned()).collect()),
-                VariableValue::Scalar(..) => return Err(EvaluationError::UseScalarAsArray),
+        let _keys = |value: &VariableValue| match value {
+            VariableValue::Uninitialised => Ok(Vec::new()),
+            VariableValue::Array(array) => Ok(array.keys().map(|key| key.to_owned()).collect()),
+            VariableValue::Scalar(..) => return Err(EvaluationError::UseScalarAsArray),
+        };
+        if let Some(locals) = self.locals.last() {
+            if let Some(value) = locals.get(name) {
+                return _keys(value);
             }
+        }
+        if let Some(value) = self.vars.get(name) {
+            _keys(value)
         } else {
             Ok(Vec::new())
         }
@@ -98,12 +122,7 @@ impl Variables {
             .join(""))
     }
 
-    pub fn get(
-        &self,
-        funcs: &Functions,
-        name: &str,
-        subscript: Option<&str>,
-    ) -> Result<ExprValue, EvaluationError> {
+    pub fn get(&self, name: &str, subscript: Option<&str>) -> Result<ExprValue, EvaluationError> {
         match name {
             "FNR" | "FS" | "NF" | "NR" | "SUBSEP" if subscript.is_some() => {
                 Err(EvaluationError::UseScalarAsArray)
@@ -113,12 +132,30 @@ impl Variables {
             "NF" => Ok(ExprValue::from(self.nf)),
             "NR" => Ok(ExprValue::from(self.nr)),
             "SUBSEP" => Ok(ExprValue::from(self.subsep.to_owned())),
-            _ if funcs.is_local_var(name) => funcs.get_local_var(name, subscript),
-            _ => Variables::get_var(&self.vars, name, subscript),
+            _ => {
+                if let Some(value) = self.get_local_var(name, subscript) {
+                    value
+                } else {
+                    Variables::get_var(&self.vars, name, subscript)
+                }
+            },
         }
     }
 
-    pub fn get_var(
+    fn get_local_var(
+        &self,
+        name: &str,
+        subscript: Option<&str>,
+    ) -> Option<Result<ExprValue, EvaluationError>> {
+        if let Some(locals) = self.locals.last() {
+            if locals.contains_key(name) {
+                return Some(Variables::get_var(locals, name, subscript));
+            }
+        }
+        None
+    }
+
+    fn get_var(
         vars: &HashMap<String, VariableValue>,
         name: &str,
         subscript: Option<&str>,
@@ -140,7 +177,6 @@ impl Variables {
 
     pub fn set(
         &mut self,
-        funcs: &mut Functions,
         ty: &AssignType,
         name: &str,
         subscript: Option<&str>,
@@ -177,12 +213,38 @@ impl Variables {
                 self.subsep = result.as_string();
                 Ok(ExprValue::from(self.subsep.to_owned()))
             },
-            _ if funcs.is_local_var(name) => funcs.set_local_var(ty, name, subscript, new_value),
-            _ => Variables::set_var(&mut self.vars, ty, name, subscript, new_value),
+            _ => {
+                if let Some(value) = self.set_local_var(ty, name, subscript, &new_value) {
+                    value
+                } else {
+                    Variables::set_var(&mut self.vars, ty, name, subscript, new_value)
+                }
+            },
         }
     }
 
-    pub fn set_var(
+    fn set_local_var(
+        &mut self,
+        ty: &AssignType,
+        name: &str,
+        subscript: Option<&str>,
+        new_value: &ExprValue,
+    ) -> Option<Result<ExprValue, EvaluationError>> {
+        if let Some(locals) = self.locals.last_mut() {
+            if locals.contains_key(name) {
+                return Some(Variables::set_var(
+                    locals,
+                    ty,
+                    name,
+                    subscript,
+                    new_value.clone(),
+                ));
+            }
+        }
+        None
+    }
+
+    fn set_var(
         vars: &mut HashMap<String, VariableValue>,
         ty: &AssignType,
         name: &str,

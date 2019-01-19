@@ -26,7 +26,6 @@ impl Eval for Stmt {
             Stmt::ForIn(var, array, body) => {
                 for key in vars.array_keys(array)? {
                     vars.set(
-                        funcs,
                         &AssignType::Normal,
                         &var,
                         None,
@@ -146,7 +145,7 @@ mod tests {
         cxt.set_next_record("1".to_owned());
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
+            cxt.vars.get("a", None),
             Ok(ExprValue::from("OK".to_owned())),
             "{:?}",
             stmt
@@ -155,7 +154,7 @@ mod tests {
         cxt.set_next_record("2".to_owned());
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
+            cxt.vars.get("a", None),
             Ok(ExprValue::from("KO".to_owned())),
             "{:?}",
             stmt
@@ -164,7 +163,7 @@ mod tests {
         let stmt = get_stmt(r#"if ($1 == 2) a = "OK"; else a = "KO""#);
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
+            cxt.vars.get("a", None),
             Ok(ExprValue::from("OK".to_owned())),
             "{:?}",
             stmt
@@ -177,7 +176,7 @@ mod tests {
         let stmt = get_stmt("{ a = 1; b = 2; c = a + b }");
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "c", None),
+            cxt.vars.get("c", None),
             Ok(ExprValue::from(3.0)),
             "{:?}",
             stmt
@@ -190,7 +189,7 @@ mod tests {
         let stmt = get_stmt("while (a < 5) a += 2");
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
+            cxt.vars.get("a", None),
             Ok(ExprValue::from(6.0)),
             "{:?}",
             stmt
@@ -199,7 +198,7 @@ mod tests {
         let stmt = get_stmt("do a += 2; while (a < 5)");
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
+            cxt.vars.get("a", None),
             Ok(ExprValue::from(8.0)),
             "{:?}",
             stmt
@@ -212,7 +211,7 @@ mod tests {
         let stmt = get_stmt("for (i = 0; i < 5; i++) a = a i");
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
+            cxt.vars.get("a", None),
             Ok(ExprValue::from("01234".to_owned())),
             "{:?}",
             stmt
@@ -225,7 +224,7 @@ mod tests {
         let stmt = get_stmt("while (a < 10) if (a < 5) a += 2; else break;");
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", None),
+            cxt.vars.get("a", None),
             Ok(ExprValue::from(6.0)),
             "{:?}",
             stmt
@@ -234,7 +233,7 @@ mod tests {
         let stmt = get_stmt("do if (b < 5) b += 2; else break; while (b < 10)");
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b", None),
+            cxt.vars.get("b", None),
             Ok(ExprValue::from(6.0)),
             "{:?}",
             stmt
@@ -244,7 +243,7 @@ mod tests {
             get_stmt(r#"for (i = 0; i < 10; i++) { c = c i; if (c == "2100123") break; c = i c }"#);
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "c", None),
+            cxt.vars.get("c", None),
             Ok(ExprValue::from("2100123".to_owned())),
             "{:?}",
             stmt
@@ -257,13 +256,13 @@ mod tests {
         let stmt = get_stmt("while (a1 < 10) { a1++; if (a1 < 5) continue; a2++; }");
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a1", None),
+            cxt.vars.get("a1", None),
             Ok(ExprValue::from(10.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a2", None),
+            cxt.vars.get("a2", None),
             Ok(ExprValue::from(6.0)),
             "{:?}",
             stmt
@@ -272,13 +271,13 @@ mod tests {
         let stmt = get_stmt("do { b1++; if (b1 < 5) continue; b2++; } while (b1 < 10)");
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b1", None),
+            cxt.vars.get("b1", None),
             Ok(ExprValue::from(10.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "b2", None),
+            cxt.vars.get("b2", None),
             Ok(ExprValue::from(6.0)),
             "{:?}",
             stmt
@@ -288,7 +287,7 @@ mod tests {
             get_stmt(r#"for (i = 0; i < 5; i++) { c = c i; if (c % 2 == 0) continue; c = i c }"#);
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "c", None),
+            cxt.vars.get("c", None),
             Ok(ExprValue::from("3101234".to_owned())),
             "{:?}",
             stmt
@@ -311,25 +310,25 @@ mod tests {
         );
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("0")),
+            cxt.vars.get("a", Some("0")),
             Ok(ExprValue::from(10.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("1")),
+            cxt.vars.get("a", Some("1")),
             Ok(ExprValue::from(20.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("2")),
+            cxt.vars.get("a", Some("2")),
             Ok(ExprValue::from(30.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("3")),
+            cxt.vars.get("a", Some("3")),
             Ok(ExprValue::from(40.0)),
             "{:?}",
             stmt
@@ -354,25 +353,25 @@ mod tests {
         );
         eval_stmt(&stmt, &mut cxt).unwrap();
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("0")),
+            cxt.vars.get("a", Some("0")),
             Ok(ExprValue::Uninitialised),
             "{:?}",
             stmt
         );
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("1")),
+            cxt.vars.get("a", Some("1")),
             Ok(ExprValue::Uninitialised),
             "{:?}",
             stmt
         );
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("2")),
+            cxt.vars.get("a", Some("2")),
             Ok(ExprValue::from(15.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            cxt.vars.get(&mut cxt.funcs, "a", Some("3")),
+            cxt.vars.get("a", Some("3")),
             Ok(ExprValue::from(20.0)),
             "{:?}",
             stmt
