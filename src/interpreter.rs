@@ -42,18 +42,11 @@ impl<'a> Runtime<'a> {
     }
 }
 
-#[derive(Copy, Clone)]
-pub enum Context {
-    Scalar,
-    FunctionArgs,
-}
-
 trait Eval {
     type EvalResult;
-    fn eval(
+    fn eval<'a>(
         &self,
-        cxt: Context,
-        vars: &mut variables::Variables,
+        vars: &'a mut variables::Variables,
         record: &mut record::Record,
         funcs: &functions::Functions,
     ) -> Result<Self::EvalResult, EvaluationError>;

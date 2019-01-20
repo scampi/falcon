@@ -1,8 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{
-        functions::Functions, record::Record, value::Value, variables::Variables, Context, Eval,
-    },
+    interpreter::{functions::Functions, record::Record, value::Value, variables::Variables, Eval},
     parser::ast::{AssignType, Stmt},
 };
 
@@ -16,10 +14,9 @@ pub enum StmtResult {
 
 impl Eval for Stmt {
     type EvalResult = Option<StmtResult>;
-    fn eval(
+    fn eval<'a>(
         &self,
-        cxt: Context,
-        vars: &mut Variables,
+        vars: &'a mut Variables,
         record: &mut Record,
         funcs: &Functions,
     ) -> Result<Option<StmtResult>, EvaluationError> {
@@ -27,7 +24,7 @@ impl Eval for Stmt {
             Stmt::ForIn(var, array, body) => {
                 for key in vars.array_keys(array)? {
                     vars.set(&AssignType::Normal, &var, None, Value::from(key.to_owned()))?;
-                    if let Some(res) = body.eval(cxt, vars, record, funcs)? {
+                    if let Some(res) = body.eval(vars, record, funcs)? {
                         match res {
                             StmtResult::Break => break,
                             StmtResult::Continue => (),
@@ -39,16 +36,16 @@ impl Eval for Stmt {
             },
             Stmt::For(init, cond, step, body) => match (init, cond, step) {
                 (Some(init), Some(cond), Some(step)) => {
-                    init.eval(cxt, vars, record, funcs)?;
-                    while cond.eval(cxt, vars, record, funcs)?.as_bool() {
-                        if let Some(res) = body.eval(cxt, vars, record, funcs)? {
+                    init.eval(vars, record, funcs)?;
+                    while cond.eval(vars, record, funcs)?.as_bool() {
+                        if let Some(res) = body.eval(vars, record, funcs)? {
                             match res {
                                 StmtResult::Break => break,
                                 StmtResult::Continue => (),
                                 _ => unimplemented!("{:?}", res),
                             }
                         }
-                        step.eval(cxt, vars, record, funcs)?;
+                        step.eval(vars, record, funcs)?;
                     }
                     Ok(None)
                 },
@@ -56,22 +53,22 @@ impl Eval for Stmt {
             },
             Stmt::DoWhile(cond, stmt) => {
                 loop {
-                    if let Some(res) = stmt.eval(cxt, vars, record, funcs)? {
+                    if let Some(res) = stmt.eval(vars, record, funcs)? {
                         match res {
                             StmtResult::Break => break,
                             StmtResult::Continue => (),
                             _ => unimplemented!("{:?}", res),
                         }
                     }
-                    if !cond.eval(cxt, vars, record, funcs)?.as_bool() {
+                    if !cond.eval(vars, record, funcs)?.as_bool() {
                         break;
                     }
                 }
                 Ok(None)
             },
             Stmt::While(cond, stmt) => {
-                while cond.eval(cxt, vars, record, funcs)?.as_bool() {
-                    if let Some(res) = stmt.eval(cxt, vars, record, funcs)? {
+                while cond.eval(vars, record, funcs)?.as_bool() {
+                    if let Some(res) = stmt.eval(vars, record, funcs)? {
                         match res {
                             StmtResult::Break => break,
                             StmtResult::Continue => continue,
@@ -82,17 +79,17 @@ impl Eval for Stmt {
                 Ok(None)
             },
             Stmt::IfElse(cond, ok, ko) => {
-                if cond.eval(cxt, vars, record, funcs)?.as_bool() {
-                    ok.eval(cxt, vars, record, funcs)
+                if cond.eval(vars, record, funcs)?.as_bool() {
+                    ok.eval(vars, record, funcs)
                 } else if let Some(ko) = ko {
-                    ko.eval(cxt, vars, record, funcs)
+                    ko.eval(vars, record, funcs)
                 } else {
                     Ok(None)
                 }
             },
             Stmt::Block(stmts) => {
                 for stmt in &stmts.0 {
-                    if let Some(res) = stmt.eval(cxt, vars, record, funcs)? {
+                    if let Some(res) = stmt.eval(vars, record, funcs)? {
                         match res {
                             StmtResult::Break => return Ok(Some(StmtResult::Break)),
                             StmtResult::Continue => return Ok(Some(StmtResult::Continue)),
@@ -102,18 +99,18 @@ impl Eval for Stmt {
                 }
                 Ok(None)
             },
-            Stmt::Expr(e) => e.eval(cxt, vars, record, funcs).map(|_| None),
+            Stmt::Expr(e) => e.eval(vars, record, funcs).map(|_| None),
             Stmt::Break => Ok(Some(StmtResult::Break)),
             Stmt::Continue => Ok(Some(StmtResult::Continue)),
             Stmt::Return(expr) => match expr {
                 Some(expr) => {
-                    let ret = expr.eval(cxt, vars, record, funcs)?;
+                    let ret = expr.eval(vars, record, funcs)?;
                     Ok(Some(StmtResult::Return(ret)))
                 },
                 None => Ok(Some(StmtResult::Return(Value::Uninitialised))),
             },
             Stmt::Delete(array, index) => {
-                let key_str = Variables::array_key(index.eval(cxt, vars, record, funcs)?)?;
+                let key_str = Variables::array_key(index.eval(vars, record, funcs)?)?;
                 vars.delete(array, &key_str)?;
                 Ok(None)
             },
@@ -131,7 +128,7 @@ mod tests {
     };
 
     fn eval_stmt(stmt: &Stmt, rt: &mut Runtime) -> Result<Option<StmtResult>, EvaluationError> {
-        stmt.eval(Context::Scalar, &mut rt.vars, &mut rt.record, &rt.funcs)
+        stmt.eval(&mut rt.vars, &mut rt.record, &rt.funcs)
     }
 
     #[test]
@@ -141,7 +138,7 @@ mod tests {
         rt.set_next_record("1".to_owned());
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", None),
+            rt.vars.get("a", None),
             Ok(Value::from("OK".to_owned())),
             "{:?}",
             stmt
@@ -150,7 +147,7 @@ mod tests {
         rt.set_next_record("2".to_owned());
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", None),
+            rt.vars.get("a", None),
             Ok(Value::from("KO".to_owned())),
             "{:?}",
             stmt
@@ -159,7 +156,7 @@ mod tests {
         let stmt = get_stmt(r#"if ($1 == 2) a = "OK"; else a = "KO""#);
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", None),
+            rt.vars.get("a", None),
             Ok(Value::from("OK".to_owned())),
             "{:?}",
             stmt
@@ -171,12 +168,7 @@ mod tests {
         let mut rt = Runtime::new();
         let stmt = get_stmt("{ a = 1; b = 2; c = a + b }");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "c", None),
-            Ok(Value::from(3.0)),
-            "{:?}",
-            stmt
-        );
+        assert_eq!(rt.vars.get("c", None), Ok(Value::from(3.0)), "{:?}", stmt);
     }
 
     #[test]
@@ -184,21 +176,11 @@ mod tests {
         let mut rt = Runtime::new();
         let stmt = get_stmt("while (a < 5) a += 2");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "a", None),
-            Ok(Value::from(6.0)),
-            "{:?}",
-            stmt
-        );
+        assert_eq!(rt.vars.get("a", None), Ok(Value::from(6.0)), "{:?}", stmt);
 
         let stmt = get_stmt("do a += 2; while (a < 5)");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "a", None),
-            Ok(Value::from(8.0)),
-            "{:?}",
-            stmt
-        );
+        assert_eq!(rt.vars.get("a", None), Ok(Value::from(8.0)), "{:?}", stmt);
     }
 
     #[test]
@@ -207,7 +189,7 @@ mod tests {
         let stmt = get_stmt("for (i = 0; i < 5; i++) a = a i");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", None),
+            rt.vars.get("a", None),
             Ok(Value::from("01234".to_owned())),
             "{:?}",
             stmt
@@ -219,27 +201,17 @@ mod tests {
         let mut rt = Runtime::new();
         let stmt = get_stmt("while (a < 10) if (a < 5) a += 2; else break;");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "a", None),
-            Ok(Value::from(6.0)),
-            "{:?}",
-            stmt
-        );
+        assert_eq!(rt.vars.get("a", None), Ok(Value::from(6.0)), "{:?}", stmt);
 
         let stmt = get_stmt("do if (b < 5) b += 2; else break; while (b < 10)");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "b", None),
-            Ok(Value::from(6.0)),
-            "{:?}",
-            stmt
-        );
+        assert_eq!(rt.vars.get("b", None), Ok(Value::from(6.0)), "{:?}", stmt);
 
         let stmt =
             get_stmt(r#"for (i = 0; i < 10; i++) { c = c i; if (c == "2100123") break; c = i c }"#);
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get(Context::Scalar, "c", None),
+            rt.vars.get("c", None),
             Ok(Value::from("2100123".to_owned())),
             "{:?}",
             stmt
@@ -251,39 +223,19 @@ mod tests {
         let mut rt = Runtime::new();
         let stmt = get_stmt("while (a1 < 10) { a1++; if (a1 < 5) continue; a2++; }");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "a1", None),
-            Ok(Value::from(10.0)),
-            "{:?}",
-            stmt
-        );
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "a2", None),
-            Ok(Value::from(6.0)),
-            "{:?}",
-            stmt
-        );
+        assert_eq!(rt.vars.get("a1", None), Ok(Value::from(10.0)), "{:?}", stmt);
+        assert_eq!(rt.vars.get("a2", None), Ok(Value::from(6.0)), "{:?}", stmt);
 
         let stmt = get_stmt("do { b1++; if (b1 < 5) continue; b2++; } while (b1 < 10)");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "b1", None),
-            Ok(Value::from(10.0)),
-            "{:?}",
-            stmt
-        );
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "b2", None),
-            Ok(Value::from(6.0)),
-            "{:?}",
-            stmt
-        );
+        assert_eq!(rt.vars.get("b1", None), Ok(Value::from(10.0)), "{:?}", stmt);
+        assert_eq!(rt.vars.get("b2", None), Ok(Value::from(6.0)), "{:?}", stmt);
 
         let stmt =
             get_stmt(r#"for (i = 0; i < 5; i++) { c = c i; if (c % 2 == 0) continue; c = i c }"#);
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get(Context::Scalar, "c", None),
+            rt.vars.get("c", None),
             Ok(Value::from("3101234".to_owned())),
             "{:?}",
             stmt
@@ -306,25 +258,25 @@ mod tests {
         );
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", Some("0")),
+            rt.vars.get("a", Some("0")),
             Ok(Value::from(10.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", Some("1")),
+            rt.vars.get("a", Some("1")),
             Ok(Value::from(20.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", Some("2")),
+            rt.vars.get("a", Some("2")),
             Ok(Value::from(30.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", Some("3")),
+            rt.vars.get("a", Some("3")),
             Ok(Value::from(40.0)),
             "{:?}",
             stmt
@@ -349,25 +301,25 @@ mod tests {
         );
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", Some("0")),
+            rt.vars.get("a", Some("0")),
             Ok(Value::Uninitialised),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", Some("1")),
+            rt.vars.get("a", Some("1")),
             Ok(Value::Uninitialised),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", Some("2")),
+            rt.vars.get("a", Some("2")),
             Ok(Value::from(15.0)),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get(Context::Scalar, "a", Some("3")),
+            rt.vars.get("a", Some("3")),
             Ok(Value::from(20.0)),
             "{:?}",
             stmt

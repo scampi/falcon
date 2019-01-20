@@ -1,14 +1,33 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{value::Value, Context},
-    parser::ast::AssignType,
+    interpreter::{functions::Functions, record::Record, value::Value, Eval},
+    parser::ast::{AssignType, Expr, ExprList, LValueType},
 };
 use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Debug)]
+struct FunctionCall {
+    locals: HashMap<String, Value>,
+    references: HashMap<String, String>,
+}
+
+impl FunctionCall {
+    fn get<'a>(&'a self, globals: &'a HashMap<String, Value>, name: &str) -> Option<&'a Value> {
+        if let Some(alias) = self.references.get(name) {
+            if let Some(value) = globals.get(alias) {
+                return Some(value);
+            } else {
+                unreachable!();
+            }
+        }
+        self.locals.get(name)
+    }
+}
+
+#[derive(Debug)]
 pub struct Variables {
-    vars: HashMap<String, Value>,
-    locals: Vec<HashMap<String, Value>>,
+    globals: HashMap<String, Value>,
+    locals: Vec<FunctionCall>,
     ///// The number of arguments
     //argc: usize,
     ///// The command line arguments
@@ -37,7 +56,7 @@ pub struct Variables {
 impl Variables {
     pub fn new() -> Variables {
         Variables {
-            vars: HashMap::new(),
+            globals: HashMap::new(),
             locals: Vec::new(),
             fnr: 0,
             fs: String::from(" "),
@@ -49,12 +68,12 @@ impl Variables {
 
     #[cfg(test)]
     pub fn has_user_vars(&self) -> bool {
-        !self.vars.is_empty()
+        !self.globals.is_empty()
     }
 
     #[cfg(test)]
     pub fn clean(&mut self) {
-        self.vars.clear();
+        self.globals.clear();
         self.locals.clear();
         self.fnr = 0;
         self.nr = 0;
@@ -63,16 +82,37 @@ impl Variables {
         self.fs.push_str(" ");
     }
 
-    pub fn init_local_var(&mut self, name: String, value: Value) {
-        if let Some(locals) = self.locals.last_mut() {
-            locals.insert(name, value);
-        } else {
-            unreachable!()
-        }
-    }
+    pub fn push_local_stack(
+        &mut self,
+        params: &[String],
+        args: &ExprList,
+        record: &mut Record,
+        funcs: &Functions,
+    ) -> Result<(), EvaluationError> {
+        let mut locals = HashMap::new();
+        let mut references = HashMap::new();
+        let mut params_iter = params.iter();
 
-    pub fn push_local_stack(&mut self) {
-        self.locals.push(HashMap::new());
+        // The iterator for args needs to be called first since it may be shorter than
+        // params. Zip will short-circuit and not call next on params_iter if args is
+        // smaller. This allows to fill the locals map with any remaining params.
+        for (arg, param) in args.0.iter().zip(params_iter.by_ref()) {
+            // Arrays are passed by reference and so the param will refer to the
+            // globally defined array instead of creating a new one within the
+            // function's scope.
+            if let Expr::LValue(LValueType::Name(name)) = arg {
+                if let Some(Value::Array(_)) = self.globals.get(name) {
+                    references.insert(param.to_owned(), name.to_owned());
+                    continue;
+                }
+            }
+            locals.insert(param.to_owned(), arg.eval(self, record, funcs)?);
+        }
+        for param in params_iter {
+            locals.insert(param.to_owned(), Value::Uninitialised);
+        }
+        self.locals.push(FunctionCall { locals, references });
+        Ok(())
     }
 
     pub fn pop_local_stack(&mut self) {
@@ -88,11 +128,11 @@ impl Variables {
             _ => return Err(EvaluationError::UseScalarAsArray),
         };
         if let Some(locals) = self.locals.last() {
-            if let Some(value) = locals.get(name) {
+            if let Some(value) = locals.get(&self.globals, name) {
                 return _keys(value);
             }
         }
-        if let Some(value) = self.vars.get(name) {
+        if let Some(value) = self.globals.get(name) {
             _keys(value)
         } else {
             Ok(Vec::new())
@@ -100,7 +140,7 @@ impl Variables {
     }
 
     pub fn delete(&mut self, name: &str, key: &str) -> Result<(), EvaluationError> {
-        if let Entry::Occupied(mut entry) = self.vars.entry(name.to_owned()) {
+        if let Entry::Occupied(mut entry) = self.globals.entry(name.to_owned()) {
             match entry.get_mut() {
                 Value::Uninitialised => (),
                 Value::Array(array) => {
@@ -122,12 +162,7 @@ impl Variables {
             .join(""))
     }
 
-    pub fn get(
-        &self,
-        cxt: Context,
-        name: &str,
-        subscript: Option<&str>,
-    ) -> Result<Value, EvaluationError> {
+    pub fn get(&self, name: &str, subscript: Option<&str>) -> Result<Value, EvaluationError> {
         match name {
             "FNR" | "FS" | "NF" | "NR" | "SUBSEP" if subscript.is_some() => {
                 Err(EvaluationError::UseScalarAsArray)
@@ -138,10 +173,10 @@ impl Variables {
             "NR" => Ok(Value::from(self.nr)),
             "SUBSEP" => Ok(Value::from(self.subsep.to_owned())),
             _ => {
-                if let Some(value) = self.get_local_var(cxt, name, subscript) {
+                if let Some(value) = self.get_local_var(name, subscript) {
                     value
                 } else {
-                    Variables::get_var(&self.vars, cxt, name, subscript)
+                    Variables::get_var(&self.globals, name, subscript)
                 }
             },
         }
@@ -149,13 +184,14 @@ impl Variables {
 
     fn get_local_var(
         &self,
-        cxt: Context,
         name: &str,
         subscript: Option<&str>,
     ) -> Option<Result<Value, EvaluationError>> {
-        if let Some(locals) = self.locals.last() {
+        if let Some(FunctionCall { locals, references }) = self.locals.last() {
             if locals.contains_key(name) {
-                return Some(Variables::get_var(locals, cxt, name, subscript));
+                return Some(Variables::get_var(locals, name, subscript));
+            } else if let Some(reference) = references.get(name) {
+                return Some(Variables::get_var(&self.globals, reference, subscript));
             }
         }
         None
@@ -163,20 +199,13 @@ impl Variables {
 
     fn get_var(
         vars: &HashMap<String, Value>,
-        cxt: Context,
         name: &str,
         subscript: Option<&str>,
     ) -> Result<Value, EvaluationError> {
         match vars.get(name) {
             Some(value) => match (subscript, value) {
                 (Some(..), _) if value.is_scalar() => Err(EvaluationError::UseScalarAsArray),
-                (None, Value::Array(_)) => {
-                    if let Context::FunctionArgs = cxt {
-                        Ok(value.clone())
-                    } else {
-                        Err(EvaluationError::UseArrayInScalarContext)
-                    }
-                },
+                (None, Value::Array(_)) => Err(EvaluationError::UseArrayInScalarContext),
                 (Some(index), Value::Array(array)) => match array.get(index) {
                     Some(value) => Ok(value.clone()),
                     None => Ok(Value::Uninitialised),
@@ -229,7 +258,7 @@ impl Variables {
                 if let Some(value) = self.set_local_var(ty, name, subscript, &new_value) {
                     value
                 } else {
-                    Variables::set_var(&mut self.vars, ty, name, subscript, new_value)
+                    Variables::set_var(&mut self.globals, ty, name, subscript, new_value)
                 }
             },
         }
@@ -242,12 +271,20 @@ impl Variables {
         subscript: Option<&str>,
         new_value: &Value,
     ) -> Option<Result<Value, EvaluationError>> {
-        if let Some(locals) = self.locals.last_mut() {
+        if let Some(FunctionCall { locals, references }) = self.locals.last_mut() {
             if locals.contains_key(name) {
                 return Some(Variables::set_var(
                     locals,
                     ty,
                     name,
+                    subscript,
+                    new_value.clone(),
+                ));
+            } else if let Some(reference) = references.get(name) {
+                return Some(Variables::set_var(
+                    &mut self.globals,
+                    ty,
+                    reference,
                     subscript,
                     new_value.clone(),
                 ));

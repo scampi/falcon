@@ -1,8 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{
-        record::Record, stmt::StmtResult, value::Value, variables::Variables, Context, Eval,
-    },
+    interpreter::{record::Record, stmt::StmtResult, value::Value, variables::Variables, Eval},
     parser::ast::{ExprList, Item, Program},
 };
 use std::collections::{hash_map::Entry, HashMap};
@@ -57,27 +55,11 @@ impl<'a> Functions<'a> {
                     ));
                 }
                 // setup local variables
-
-                // evaluate the arguments with the current stack, then push in
-                // a new one for this call.
-                let cxt = Context::FunctionArgs;
-                let args_iter = args.eval(cxt, vars, record, self)?.into_iter();
-                vars.push_local_stack();
-
-                let mut params_iter = params.iter();
-                // The iterator for args needs to be called first since it may be shorter than
-                // params. Zip will short-circuit and not call next on params_iter if args is
-                // smaller. This allows to fill the locals map with any remaining params.
-                for (arg, param) in args_iter.zip(params_iter.by_ref()) {
-                    vars.init_local_var(param.to_owned(), arg);
-                }
-                for param in params_iter {
-                    vars.init_local_var(param.to_owned(), Value::Uninitialised);
-                }
+                vars.push_local_stack(params.as_slice(), args, record, self)?;
                 // execute the function
                 let mut ret = Value::Uninitialised;
                 for stmt in &stmts.0 {
-                    if let Some(res) = stmt.eval(Context::Scalar, vars, record, self)? {
+                    if let Some(res) = stmt.eval(vars, record, self)? {
                         match res {
                             StmtResult::Return(v) => {
                                 ret = v;
@@ -87,7 +69,7 @@ impl<'a> Functions<'a> {
                         }
                     }
                 }
-                // cleanup local variables
+                // pop the call stack
                 vars.pop_local_stack();
                 Ok(ret)
             },

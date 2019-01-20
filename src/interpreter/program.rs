@@ -1,15 +1,14 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{functions::Functions, record::Record, variables::Variables, Context, Eval},
+    interpreter::{functions::Functions, record::Record, variables::Variables, Eval},
     parser::ast::{Item, Program},
 };
 
 impl Eval for Program {
     type EvalResult = ();
-    fn eval(
+    fn eval<'a>(
         &self,
-        cxt: Context,
-        vars: &mut Variables,
+        vars: &'a mut Variables,
         record: &mut Record,
         funcs: &Functions,
     ) -> Result<(), EvaluationError> {
@@ -18,7 +17,7 @@ impl Eval for Program {
                 match pattern {
                     None => {
                         for stmt in &stmts.0 {
-                            stmt.eval(cxt, vars, record, funcs)?;
+                            stmt.eval(vars, record, funcs)?;
                         }
                     },
                     Some(pattern) => unimplemented!(),
@@ -38,7 +37,7 @@ mod tests {
     };
 
     fn eval_program(prog: &Program, rt: &mut Runtime) -> Result<(), EvaluationError> {
-        prog.eval(Context::Scalar, &mut rt.vars, &mut rt.record, &rt.funcs)
+        prog.eval(&mut rt.vars, &mut rt.record, &rt.funcs)
     }
 
     #[test]
@@ -83,7 +82,7 @@ mod tests {
         let prog = get_program("function adder(var) { a += var } { a = 42; adder(2); }");
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(rt.vars.get(Context::Scalar, "a", None), Ok(Value::from(44)));
+        assert_eq!(rt.vars.get("a", None), Ok(Value::from(44)));
 
         // initialize a global variable and mutate a local variable with the same name
         // as a global variable
@@ -91,8 +90,8 @@ mod tests {
         let prog = get_program("function adder(a) { a += 10; b = a; } { a = 1; adder(5); }");
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(rt.vars.get(Context::Scalar, "a", None), Ok(Value::from(1)));
-        assert_eq!(rt.vars.get(Context::Scalar, "b", None), Ok(Value::from(15)));
+        assert_eq!(rt.vars.get("a", None), Ok(Value::from(1)));
+        assert_eq!(rt.vars.get("b", None), Ok(Value::from(15)));
 
         // assign return value of a function
         rt.clean();
@@ -103,11 +102,8 @@ mod tests {
         );
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "a", None),
-            Ok(Value::Uninitialised)
-        );
-        assert_eq!(rt.vars.get(Context::Scalar, "b", None), Ok(Value::from(25)));
+        assert_eq!(rt.vars.get("a", None), Ok(Value::Uninitialised));
+        assert_eq!(rt.vars.get("b", None), Ok(Value::from(25)));
 
         // ensure function-locality of variables
         rt.clean();
@@ -118,18 +114,15 @@ mod tests {
         );
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(rt.vars.get(Context::Scalar, "b", None), Ok(Value::from(11)));
+        assert_eq!(rt.vars.get("b", None), Ok(Value::from(11)));
 
         // declare the variable "b" scoped to the function
         rt.clean();
         let prog = get_program("function adder(a, b) { a += 10; b = a; } { a = 1; adder(5); }");
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(rt.vars.get(Context::Scalar, "a", None), Ok(Value::from(1)));
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "b", None),
-            Ok(Value::Uninitialised)
-        );
+        assert_eq!(rt.vars.get("a", None), Ok(Value::from(1)));
+        assert_eq!(rt.vars.get("b", None), Ok(Value::Uninitialised));
 
         // call another function from a function to verify locals are properly handled
         rt.clean();
@@ -140,7 +133,7 @@ mod tests {
         );
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(rt.vars.get(Context::Scalar, "a", None), Ok(Value::from(20)));
+        assert_eq!(rt.vars.get("a", None), Ok(Value::from(20)));
 
         // variable local to a function should be overridden if used in loop
         rt.clean();
@@ -154,7 +147,7 @@ mod tests {
         );
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(rt.vars.get(Context::Scalar, "a", None), Ok(Value::from(10)));
+        assert_eq!(rt.vars.get("a", None), Ok(Value::from(10)));
     }
 
     #[test]
@@ -165,10 +158,7 @@ mod tests {
         let prog = get_program("function adder(var) { a[0] += var } { a[0] = 42; adder(2); }");
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "a", Some("0")),
-            Ok(Value::from(44))
-        );
+        assert_eq!(rt.vars.get("a", Some("0")), Ok(Value::from(44)));
 
         // update local array
         rt.clean();
@@ -187,10 +177,7 @@ mod tests {
         );
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "result", None),
-            Ok(Value::from(8))
-        );
+        assert_eq!(rt.vars.get("result", None), Ok(Value::from(8)));
 
         // pass array as argument
         rt.clean();
@@ -212,8 +199,16 @@ mod tests {
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get(Context::Scalar, "result", None),
-            Ok(Value::from(11))
+            rt.vars.get("result", None),
+            Ok(Value::from(11)),
+            "{:?}",
+            rt.vars
+        );
+        assert_eq!(
+            rt.vars.get("c", None),
+            Ok(Value::Uninitialised),
+            "{:?}",
+            rt.vars
         );
 
         // mutate an array by reference
@@ -231,10 +226,7 @@ mod tests {
         );
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
-        assert_eq!(
-            rt.vars.get(Context::Scalar, "my_array", Some("0")),
-            Ok(Value::from(6))
-        );
+        assert_eq!(rt.vars.get("my_array", Some("0")), Ok(Value::from(6)));
     }
 
     #[test]
