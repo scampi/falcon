@@ -218,7 +218,7 @@ mod tests {
             function f(arr) {
                 arr[0]++;
             }
-            { 
+            {
                 my_array[0] = 5;
                 f(my_array);
             }
@@ -227,6 +227,25 @@ mod tests {
         rt.load_program(&prog).unwrap();
         eval_program(&prog, &mut rt).unwrap();
         assert_eq!(rt.vars.get("my_array", Some("0")), Ok(Value::from(6)));
+
+        // delete an element of an array by reference
+        rt.clean();
+        let prog = get_program(
+            r#"
+            function f(arr) {
+                delete arr[0];
+            }
+            {
+                my_array[0] = 5;
+                my_array[1] = 6;
+                f(my_array);
+            }
+            "#,
+        );
+        rt.load_program(&prog).unwrap();
+        eval_program(&prog, &mut rt).unwrap();
+        assert_eq!(rt.vars.get("my_array", Some("0")), Ok(Value::Uninitialised));
+        assert_eq!(rt.vars.get("my_array", Some("1")), Ok(Value::from(6)));
     }
 
     #[test]

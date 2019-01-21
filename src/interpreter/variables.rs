@@ -140,18 +140,32 @@ impl Variables {
     }
 
     pub fn delete(&mut self, name: &str, key: &str) -> Result<(), EvaluationError> {
-        if let Entry::Occupied(mut entry) = self.globals.entry(name.to_owned()) {
-            match entry.get_mut() {
-                Value::Uninitialised => (),
-                Value::Array(array) => {
-                    if let Entry::Occupied(entry) = array.entry(key.to_owned()) {
-                        entry.remove_entry();
-                    }
-                },
-                _ => return Err(EvaluationError::UseScalarAsArray),
+        let _delete = |vars: &mut HashMap<String, Value>, name: &str| {
+            if let Entry::Occupied(mut entry) = vars.entry(name.to_owned()) {
+                match entry.get_mut() {
+                    Value::Uninitialised => (),
+                    Value::Array(array) => {
+                        if let Entry::Occupied(entry) = array.entry(key.to_owned()) {
+                            entry.remove_entry();
+                        }
+                    },
+                    _ => return Err(EvaluationError::UseScalarAsArray),
+                }
+            }
+            return Ok(());
+        };
+        if let Some(FunctionCall {
+            ref mut locals,
+            references,
+        }) = self.locals.last_mut()
+        {
+            if locals.contains_key(name) {
+                return _delete(locals, name);
+            } else if let Some(reference) = references.get(name) {
+                return _delete(&mut self.globals, reference);
             }
         }
-        Ok(())
+        return _delete(&mut self.globals, name);
     }
 
     pub fn array_key(values: Vec<Value>) -> Result<String, EvaluationError> {
