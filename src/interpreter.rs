@@ -83,7 +83,21 @@ impl Runtime {
                             stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
                         }
                     },
-                    Some(pattern) => unimplemented!(),
+                    Some(Pattern::Exprs(exprs)) => {
+                        if exprs.len() == 1 {
+                            if exprs.0[0]
+                                .eval(&mut self.vars, &mut self.record, &mut self.funcs)?
+                                .as_bool()
+                            {
+                                for stmt in &stmts.0 {
+                                    stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
+                                }
+                            }
+                        } else {
+                            unimplemented!()
+                        }
+                    },
+                    _ => unreachable!(),
                 }
             }
         }
@@ -379,5 +393,37 @@ mod tests {
         assert_eq!(rt.vars.get("inside_nf", Some("1")), Ok(Value::from(3)));
         assert_eq!(rt.vars.get("inside_nf", Some("2")), Ok(Value::from(2)));
         assert_eq!(rt.vars.get("end_nf", None), Ok(Value::from(2)));
+    }
+
+    #[test]
+    fn expr_pattern() {
+        let prog = get_program(
+            r#"
+            /sheep/ { name[NR] = "shaun" }
+            /pig/ { name[NR] = "peppa" }
+            "#,
+        );
+        let mut rt = Runtime::new(prog).unwrap();
+
+        rt.set_next_record("pig".to_owned());
+        rt.execute_main_patterns().unwrap();
+
+        rt.set_next_record("dog".to_owned());
+        rt.execute_main_patterns().unwrap();
+
+        rt.set_next_record("sheep".to_owned());
+        rt.execute_main_patterns().unwrap();
+
+        let mut keys = rt.vars.array_keys("name").unwrap();
+        keys.sort_unstable();
+        assert_eq!(keys, vec!["1".to_owned(), "3".to_owned()]);
+        assert_eq!(
+            rt.vars.get("name", Some("1")),
+            Ok(Value::from("peppa".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("name", Some("3")),
+            Ok(Value::from("shaun".to_owned()))
+        );
     }
 }
