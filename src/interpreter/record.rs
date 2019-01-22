@@ -18,11 +18,6 @@ impl Record {
         }
     }
 
-    pub fn clean(&mut self) {
-        self.fields.clear();
-        self.record.clear();
-    }
-
     pub fn update_record(&mut self, vars: &mut Variables, record: String) {
         self.record = record;
         self.fields = self.record.split(&vars.fs).map(|s| s.to_owned()).collect();

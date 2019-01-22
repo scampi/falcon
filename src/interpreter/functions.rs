@@ -1,39 +1,34 @@
 use crate::{
     errors::EvaluationError,
     interpreter::{record::Record, stmt::StmtResult, value::Value, variables::Variables, Eval},
-    parser::ast::{ExprList, Item, Program},
+    parser::ast::{ExprList, Item},
 };
 use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Debug)]
-pub struct Functions<'a> {
-    funcs: HashMap<String, &'a Item>,
+pub struct Functions {
+    funcs: HashMap<String, Item>,
 }
 
-impl<'a> Functions<'a> {
-    pub fn new() -> Functions<'a> {
+impl Functions {
+    pub fn new() -> Functions {
         Functions {
             funcs: HashMap::new(),
         }
     }
 
-    #[cfg(test)]
-    pub fn clean(&mut self) {
-        self.funcs.clear();
-    }
-
-    pub fn load_functions(&mut self, prog: &'a Program) -> Result<(), EvaluationError> {
-        for item in &prog.items {
-            if let Item::FunctionDef(name, ..) = item {
-                match self.funcs.entry(name.to_owned()) {
-                    Entry::Occupied(_) => {
-                        return Err(EvaluationError::DuplicateFunction(name.to_owned()));
-                    },
-                    Entry::Vacant(entry) => {
-                        entry.insert(item);
-                    },
-                }
+    pub fn load_function(&mut self, function: Item) -> Result<(), EvaluationError> {
+        if let Item::FunctionDef(name, ..) = &function {
+            match self.funcs.entry(name.to_owned()) {
+                Entry::Occupied(_) => {
+                    return Err(EvaluationError::DuplicateFunction(name.to_owned()));
+                },
+                Entry::Vacant(entry) => {
+                    entry.insert(function);
+                },
             }
+        } else {
+            unreachable!()
         }
         Ok(())
     }

@@ -124,7 +124,7 @@ mod tests {
     use super::*;
     use crate::{
         interpreter::{value::Value, Runtime},
-        parser::stmt::get_stmt,
+        parser::{ast::Program, stmt::get_stmt},
     };
 
     fn eval_stmt(stmt: &Stmt, rt: &mut Runtime) -> Result<Option<StmtResult>, EvaluationError> {
@@ -133,7 +133,7 @@ mod tests {
 
     #[test]
     fn if_else() {
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt(r#"if ($0 == 1) { a = "OK" } else { a = "KO" }"#);
         rt.set_next_record("1".to_owned());
         eval_stmt(&stmt, &mut rt).unwrap();
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn block() {
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt("{ a = 1; b = 2; c = a + b }");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(rt.vars.get("c", None), Ok(Value::from(3.0)), "{:?}", stmt);
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn r#while() {
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt("while (a < 5) a += 2");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(rt.vars.get("a", None), Ok(Value::from(6.0)), "{:?}", stmt);
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn r#for() {
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt("for (i = 0; i < 5; i++) a = a i");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn r#break() {
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt("while (a < 10) if (a < 5) a += 2; else break;");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(rt.vars.get("a", None), Ok(Value::from(6.0)), "{:?}", stmt);
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn r#continue() {
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt("while (a1 < 10) { a1++; if (a1 < 5) continue; a2++; }");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(rt.vars.get("a1", None), Ok(Value::from(10.0)), "{:?}", stmt);
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn for_in() {
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt(
             r#"{
             a[0] = 5;
@@ -285,7 +285,7 @@ mod tests {
 
     #[test]
     fn delete() {
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt(
             r#"{
             a[0] = 5;

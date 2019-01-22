@@ -10,6 +10,10 @@ impl Program {
     pub fn new(items: Vec<Item>) -> Program {
         Program { items }
     }
+
+    pub fn empty() -> Program {
+        Program { items: vec![] }
+    }
 }
 
 impl fmt::Display for Program {

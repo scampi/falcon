@@ -71,17 +71,6 @@ impl Variables {
         !self.globals.is_empty()
     }
 
-    #[cfg(test)]
-    pub fn clean(&mut self) {
-        self.globals.clear();
-        self.locals.clear();
-        self.fnr = 0;
-        self.nr = 0;
-        self.subsep.clear();
-        self.fs.clear();
-        self.fs.push_str(" ");
-    }
-
     pub fn push_local_stack(
         &mut self,
         params: &[String],
