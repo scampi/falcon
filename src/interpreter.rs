@@ -503,4 +503,115 @@ a b"#;
             Ok(Value::from("bb john connor".to_owned()))
         );
     }
+
+    #[test]
+    fn multiple_whitespaces() {
+        let input = "   \taaa bbb       ccc   \t  ";
+        let prog = get_program("{ a = $1; b = $2; c = $3 }");
+        let mut rt = Runtime::new(prog).unwrap();
+
+        rt.set_next_record(input.to_owned());
+        rt.execute_main_patterns().unwrap();
+        assert_eq!(
+            rt.vars.get("a", None),
+            Ok(Value::from("aaa".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("b", None),
+            Ok(Value::from("bbb".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("c", None),
+            Ok(Value::from("ccc".to_owned()))
+        );
+    }
+
+    #[test]
+    fn custom_fs_value() {
+        let prog_str = |fs: &str| format!("BEGIN {{ FS=\"{}\" }} {{ for (i = 1; i <= NF; i++) arr[i] = $i }}", fs);
+
+        let input = "a.b";
+        let prog = get_program(&prog_str("."));
+        let mut rt = Runtime::new(prog).unwrap();
+        rt.execute_begin_patterns().unwrap();
+        rt.set_next_record(input.to_owned());
+        rt.execute_main_patterns().unwrap();
+        let keys = rt.vars.array_keys("arr").unwrap();
+        assert_eq!(keys.len(), 2);
+        assert_eq!(
+            rt.vars.get("arr", Some("1")),
+            Ok(Value::from("a".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("2")),
+            Ok(Value::from("b".to_owned()))
+        );
+
+        let input = "aahereayouaaaawereaaaaaa";
+        let prog = get_program(&prog_str("a+"));
+        let mut rt = Runtime::new(prog).unwrap();
+        rt.execute_begin_patterns().unwrap();
+        rt.set_next_record(input.to_owned());
+        rt.execute_main_patterns().unwrap();
+        let keys = rt.vars.array_keys("arr").unwrap();
+        assert_eq!(keys.len(), 3);
+        assert_eq!(
+            rt.vars.get("arr", Some("1")),
+            Ok(Value::from("here".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("2")),
+            Ok(Value::from("you".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("3")),
+            Ok(Value::from("were".to_owned()))
+        );
+
+        let input = "abcthisadcarcisaechere";
+        let prog = get_program(&prog_str("a.c"));
+        let mut rt = Runtime::new(prog).unwrap();
+        rt.execute_begin_patterns().unwrap();
+        rt.set_next_record(input.to_owned());
+        rt.execute_main_patterns().unwrap();
+        let keys = rt.vars.array_keys("arr").unwrap();
+        assert_eq!(keys.len(), 4);
+        assert_eq!(
+            rt.vars.get("arr", Some("1")),
+            Ok(Value::from("this".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("2")),
+            Ok(Value::from(String::new()))
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("3")),
+            Ok(Value::from("is".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("4")),
+            Ok(Value::from("here".to_owned()))
+        );
+
+        let input = "abcthisadcarcisaechere";
+        let prog = get_program(&prog_str("(a.c)+"));
+        let mut rt = Runtime::new(prog).unwrap();
+        rt.execute_begin_patterns().unwrap();
+        rt.set_next_record(input.to_owned());
+        rt.execute_main_patterns().unwrap();
+        let keys = rt.vars.array_keys("arr").unwrap();
+        assert_eq!(keys.len(), 3);
+        assert_eq!(
+            rt.vars.get("arr", Some("1")),
+            Ok(Value::from("this".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("2")),
+            Ok(Value::from("is".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("3")),
+            Ok(Value::from("here".to_owned()))
+        );
+    }
 }
