@@ -51,7 +51,8 @@ impl fmt::Display for Item {
 pub enum Pattern {
     Begin,
     End,
-    Exprs(ExprList),
+    Expr(Expr),
+    Range(Expr, Expr),
 }
 
 impl fmt::Display for Pattern {
@@ -59,7 +60,8 @@ impl fmt::Display for Pattern {
         match self {
             Pattern::Begin => write!(f, "BEGIN"),
             Pattern::End => write!(f, "END"),
-            Pattern::Exprs(exprs) => write!(f, "{}", exprs),
+            Pattern::Expr(expr) => write!(f, "{}", expr),
+            Pattern::Range(start, end) => write!(f, "{}, {}", start, end),
         }
     }
 }

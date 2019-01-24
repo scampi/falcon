@@ -77,9 +77,9 @@ parser! {
                 .and(optional(skip_wrapping_spaces(char(',')).with(parse_expr())))
                 .map(|(e1, e2)| {
                     if let Some(e2) = e2 {
-                        Pattern::Exprs(ExprList(vec![e1, e2]))
+                        Pattern::Range(e1, e2)
                     } else {
-                        Pattern::Exprs(ExprList(vec![e1]))
+                        Pattern::Expr(e1)
                     }
                 }),
         ))
@@ -166,9 +166,17 @@ mod tests {
         assert_item(
             "/42/ { print 42 }",
             Item::PatternAction(
-                Some(Pattern::Exprs(ExprList(vec![Expr::Regexp(RegexEq::new(
-                    "42",
-                ))]))),
+                Some(Pattern::Expr(Expr::Regexp(RegexEq::new("42")))),
+                StmtList(vec![Stmt::Print(ExprList(vec![Expr::Number(42f64)]), None)]),
+            ),
+        );
+        assert_item(
+            "/aa/,/dd/ { print 42 }",
+            Item::PatternAction(
+                Some(Pattern::Range(
+                    Expr::Regexp(RegexEq::new("aa")),
+                    Expr::Regexp(RegexEq::new("dd")),
+                )),
                 StmtList(vec![Stmt::Print(ExprList(vec![Expr::Number(42f64)]), None)]),
             ),
         );

@@ -17,7 +17,22 @@ pub struct Runtime {
     funcs: functions::Functions,
     begin_patterns: Vec<Item>,
     end_patterns: Vec<Item>,
-    patterns: Vec<Item>,
+    patterns: Vec<EvalItem>,
+}
+
+#[derive(Debug)]
+struct EvalItem {
+    item: Item,
+    in_range: bool,
+}
+
+impl EvalItem {
+    fn new(item: Item) -> EvalItem {
+        EvalItem {
+            item,
+            in_range: false,
+        }
+    }
 }
 
 impl Runtime {
@@ -35,7 +50,7 @@ impl Runtime {
                 Item::FunctionDef(..) => rt.funcs.load_function(item)?,
                 Item::PatternAction(Some(Pattern::Begin), _) => rt.begin_patterns.push(item),
                 Item::PatternAction(Some(Pattern::End), _) => rt.end_patterns.push(item),
-                Item::PatternAction(..) => rt.patterns.push(item),
+                Item::PatternAction(..) => rt.patterns.push(EvalItem::new(item)),
             }
         }
         Ok(rt)
@@ -75,26 +90,36 @@ impl Runtime {
     }
 
     pub fn execute_main_patterns(&mut self) -> Result<(), EvaluationError> {
-        for item in &self.patterns {
-            if let Item::PatternAction(pattern, stmts) = item {
+        for eval_item in self.patterns.iter_mut() {
+            if let Item::PatternAction(pattern, stmts) = &eval_item.item {
                 match pattern {
                     None => {
                         for stmt in &stmts.0 {
                             stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
                         }
                     },
-                    Some(Pattern::Exprs(exprs)) => {
-                        if exprs.len() == 1 {
-                            if exprs.0[0]
-                                .eval(&mut self.vars, &mut self.record, &mut self.funcs)?
-                                .as_bool()
-                            {
-                                for stmt in &stmts.0 {
-                                    stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
-                                }
+                    Some(Pattern::Expr(expr)) => {
+                        if expr
+                            .eval(&mut self.vars, &mut self.record, &mut self.funcs)?
+                            .as_bool()
+                        {
+                            for stmt in &stmts.0 {
+                                stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
                             }
-                        } else {
-                            unimplemented!()
+                        }
+                    },
+                    Some(Pattern::Range(start, end)) => {
+                        let execute = eval_item.in_range
+                            || start
+                                .eval(&mut self.vars, &mut self.record, &mut self.funcs)?
+                                .as_bool();
+                        if execute {
+                            eval_item.in_range = !end
+                                .eval(&mut self.vars, &mut self.record, &mut self.funcs)?
+                                .as_bool();
+                            for stmt in &stmts.0 {
+                                stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
+                            }
                         }
                     },
                     _ => unreachable!(),
@@ -356,6 +381,7 @@ mod tests {
         );
 
         // access FNR parameter
+        let input = "1\n2";
         let prog = get_program(
             r#"
             BEGIN { begin_fnr = FNR }
@@ -365,14 +391,17 @@ mod tests {
         let mut rt = Runtime::new(prog).unwrap();
 
         rt.execute_begin_patterns().unwrap();
-        rt.set_next_record("1".to_owned());
-        rt.set_next_record("2".to_owned());
+        for line in input.lines() {
+            rt.set_next_record(line.to_owned());
+            rt.execute_main_patterns().unwrap();
+        }
         rt.execute_end_patterns().unwrap();
 
         assert_eq!(rt.vars.get("begin_fnr", None), Ok(Value::from(0)));
         assert_eq!(rt.vars.get("end_fnr", None), Ok(Value::from(2)));
 
         // access NF parameter
+        let input = "a b c\na b";
         let prog = get_program(
             r#"
             BEGIN { begin_nf = NF }
@@ -383,10 +412,10 @@ mod tests {
         let mut rt = Runtime::new(prog).unwrap();
 
         rt.execute_begin_patterns().unwrap();
-        rt.set_next_record("a b c".to_owned());
-        rt.execute_main_patterns().unwrap();
-        rt.set_next_record("a b".to_owned());
-        rt.execute_main_patterns().unwrap();
+        for line in input.lines() {
+            rt.set_next_record(line.to_owned());
+            rt.execute_main_patterns().unwrap();
+        }
         rt.execute_end_patterns().unwrap();
 
         assert_eq!(rt.vars.get("begin_nf", None), Ok(Value::from(0)));
@@ -397,6 +426,7 @@ mod tests {
 
     #[test]
     fn expr_pattern() {
+        let input = "pig\ndog\nsheep";
         let prog = get_program(
             r#"
             /sheep/ { name[NR] = "shaun" }
@@ -405,14 +435,10 @@ mod tests {
         );
         let mut rt = Runtime::new(prog).unwrap();
 
-        rt.set_next_record("pig".to_owned());
-        rt.execute_main_patterns().unwrap();
-
-        rt.set_next_record("dog".to_owned());
-        rt.execute_main_patterns().unwrap();
-
-        rt.set_next_record("sheep".to_owned());
-        rt.execute_main_patterns().unwrap();
+        for line in input.lines() {
+            rt.set_next_record(line.to_owned());
+            rt.execute_main_patterns().unwrap();
+        }
 
         let mut keys = rt.vars.array_keys("name").unwrap();
         keys.sort_unstable();
@@ -424,6 +450,57 @@ mod tests {
         assert_eq!(
             rt.vars.get("name", Some("3")),
             Ok(Value::from("shaun".to_owned()))
+        );
+    }
+
+    #[test]
+    fn range_pattern() {
+        // 2 consecutive ranges
+        let input = "0\n1\n2\n3\n4\n1\n2\n3\n4";
+        let prog = get_program(r#"/1/,/3/ { c = c " " NR ":" $0 }"#);
+        let mut rt = Runtime::new(prog).unwrap();
+
+        for line in input.lines() {
+            rt.set_next_record(line.to_owned());
+            rt.execute_main_patterns().unwrap();
+        }
+        assert_eq!(
+            rt.vars.get("c", None),
+            Ok(Value::from(" 2:1 3:2 4:3 6:1 7:2 8:3".to_owned()))
+        );
+
+        // range starting and ending on the same line
+        let input = r#"a b
+aa bb
+bb cc
+cc dd
+a b
+aa bb
+bb cc
+cc dd
+a b"#;
+        let prog = get_program(
+            r#"
+                /^bb/,/cc$/
+                { $2 = "john connor"; c[NR] = $0 }
+            "#,
+        );
+        let mut rt = Runtime::new(prog).unwrap();
+
+        for line in input.lines() {
+            rt.set_next_record(line.to_owned());
+            rt.execute_main_patterns().unwrap();
+        }
+        let mut keys = rt.vars.array_keys("c").unwrap();
+        keys.sort_unstable();
+        assert_eq!(keys, vec!["3".to_owned(), "7".to_owned()]);
+        assert_eq!(
+            rt.vars.get("c", Some("3")),
+            Ok(Value::from("bb john connor".to_owned()))
+        );
+        assert_eq!(
+            rt.vars.get("c", Some("7")),
+            Ok(Value::from("bb john connor".to_owned()))
         );
     }
 }
