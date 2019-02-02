@@ -228,11 +228,17 @@ mod tests {
 
         let expr = get_expr("2 / 0");
         let res = eval_expr(&expr, &mut rt);
-        assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
+        match res.unwrap_err() {
+            EvaluationError::DivisionByZero => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
 
         let expr = get_expr(r#"2 / "a""#);
         let res = eval_expr(&expr, &mut rt);
-        assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
+        match res.unwrap_err() {
+            EvaluationError::DivisionByZero => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
 
         let expr = get_expr(r#"2 * "a""#);
         let res = eval_expr(&expr, &mut rt);
@@ -412,7 +418,10 @@ mod tests {
 
         let expr = get_expr("$(-42)");
         let res = eval_expr(&expr, &mut rt);
-        assert_eq!(res.unwrap_err(), EvaluationError::NegativeFieldIndex(-42));
+        match res.unwrap_err() {
+            EvaluationError::NegativeFieldIndex(-42) => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
     }
 
     #[test]
@@ -429,7 +438,7 @@ mod tests {
         let expr = get_expr("nf");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
-        assert_eq!(rt.vars.get("nf", None), Ok(Value::Uninitialised));
+        assert_eq!(rt.vars.get("nf", None).unwrap(), Value::Uninitialised);
     }
 
     #[test]
@@ -439,18 +448,21 @@ mod tests {
         let expr = get_expr("a[0]");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
-        assert_eq!(rt.vars.get("a", Some("0")), Ok(Value::Uninitialised));
+        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::Uninitialised);
 
         let expr = get_expr("b[0,1,2]");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
-        assert_eq!(rt.vars.get("b", Some("012")), Ok(Value::Uninitialised));
+        assert_eq!(rt.vars.get("b", Some("012")).unwrap(), Value::Uninitialised);
 
         rt.vars.subsep = String::from("#");
         let expr = get_expr("b[0,1,2]");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
-        assert_eq!(rt.vars.get("b", Some("0#1#2")), Ok(Value::Uninitialised));
+        assert_eq!(
+            rt.vars.get("b", Some("0#1#2")).unwrap(),
+            Value::Uninitialised
+        );
     }
 
     #[test]
@@ -460,51 +472,51 @@ mod tests {
         let expr = get_expr("a = 42");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(42));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(42)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(42));
 
         let expr = get_expr("a = b = 5");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(5));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(5)));
-        assert_eq!(rt.vars.get("b", None), Ok(Value::from(5)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(5));
+        assert_eq!(rt.vars.get("b", None).unwrap(), Value::from(5));
 
         let expr = get_expr("a ^= 2");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(25));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(25)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(25));
 
         let expr = get_expr("a = 2 + 3");
         eval_expr(&expr, &mut rt).unwrap();
         let expr = get_expr("a *= 2");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(10));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(10)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(10));
 
         let expr = get_expr("a = 2 + 3");
         eval_expr(&expr, &mut rt).unwrap();
         let expr = get_expr("a /= 2");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(2.5));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(2.5)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(2.5));
 
         let expr = get_expr("a = 2 + 3");
         eval_expr(&expr, &mut rt).unwrap();
         let expr = get_expr("a -= 2");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(3));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(3)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(3));
 
         let expr = get_expr("a = 2 + 3");
         eval_expr(&expr, &mut rt).unwrap();
         let expr = get_expr("a %= 2");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(1));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(1)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(1));
 
         let expr = get_expr("c /= 2");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(0));
-        assert_eq!(rt.vars.get("c", None), Ok(Value::from(0)));
+        assert_eq!(rt.vars.get("c", None).unwrap(), Value::from(0));
 
         let expr = get_expr(r#"FS = "@""#);
         let res = eval_expr(&expr, &mut rt);
@@ -526,7 +538,7 @@ mod tests {
         let expr = get_expr("$0 = 42");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("42".to_owned()));
-        assert_eq!(rt.record.get(0), Ok(Value::from("42".to_owned())));
+        assert_eq!(rt.record.get(0).unwrap(), Value::from("42".to_owned()));
         assert_eq!(rt.vars.nf, 1);
 
         rt.set_next_record("john connor".to_owned());
@@ -534,9 +546,12 @@ mod tests {
         let expr = get_expr(r#"$2 = "moo""#);
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("moo".to_owned()));
-        assert_eq!(rt.record.get(0), Ok(Value::from("john moo".to_owned())));
-        assert_eq!(rt.record.get(1), Ok(Value::from("john".to_owned())));
-        assert_eq!(rt.record.get(2), Ok(Value::from("moo".to_owned())));
+        assert_eq!(
+            rt.record.get(0).unwrap(),
+            Value::from("john moo".to_owned())
+        );
+        assert_eq!(rt.record.get(1).unwrap(), Value::from("john".to_owned()));
+        assert_eq!(rt.record.get(2).unwrap(), Value::from("moo".to_owned()));
         assert_eq!(rt.vars.nf, 2);
 
         rt.set_next_record("john connor".to_owned());
@@ -545,19 +560,19 @@ mod tests {
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("moo".to_owned()));
         assert_eq!(
-            rt.record.get(0),
-            Ok(Value::from("john connor        moo".to_owned()))
+            rt.record.get(0).unwrap(),
+            Value::from("john connor        moo".to_owned())
         );
-        assert_eq!(rt.record.get(1), Ok(Value::from("john".to_owned())));
-        assert_eq!(rt.record.get(2), Ok(Value::from("connor".to_owned())));
-        assert_eq!(rt.record.get(3), Ok(Value::from(String::new())));
-        assert_eq!(rt.record.get(4), Ok(Value::from(String::new())));
-        assert_eq!(rt.record.get(5), Ok(Value::from(String::new())));
-        assert_eq!(rt.record.get(6), Ok(Value::from(String::new())));
-        assert_eq!(rt.record.get(7), Ok(Value::from(String::new())));
-        assert_eq!(rt.record.get(8), Ok(Value::from(String::new())));
-        assert_eq!(rt.record.get(9), Ok(Value::from(String::new())));
-        assert_eq!(rt.record.get(10), Ok(Value::from("moo".to_owned())));
+        assert_eq!(rt.record.get(1).unwrap(), Value::from("john".to_owned()));
+        assert_eq!(rt.record.get(2).unwrap(), Value::from("connor".to_owned()));
+        assert_eq!(rt.record.get(3).unwrap(), Value::from(String::new()));
+        assert_eq!(rt.record.get(4).unwrap(), Value::from(String::new()));
+        assert_eq!(rt.record.get(5).unwrap(), Value::from(String::new()));
+        assert_eq!(rt.record.get(6).unwrap(), Value::from(String::new()));
+        assert_eq!(rt.record.get(7).unwrap(), Value::from(String::new()));
+        assert_eq!(rt.record.get(8).unwrap(), Value::from(String::new()));
+        assert_eq!(rt.record.get(9).unwrap(), Value::from(String::new()));
+        assert_eq!(rt.record.get(10).unwrap(), Value::from("moo".to_owned()));
         assert_eq!(rt.vars.nf, 10);
 
         rt.set_next_record("there are 5 apples".to_owned());
@@ -566,8 +581,8 @@ mod tests {
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("10".to_owned()));
         assert_eq!(
-            rt.record.get(0),
-            Ok(Value::from("there are 10 apples".to_owned()))
+            rt.record.get(0).unwrap(),
+            Value::from("there are 10 apples".to_owned())
         );
         assert_eq!(rt.vars.nf, 4);
 
@@ -577,8 +592,8 @@ mod tests {
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("2.5".to_owned()));
         assert_eq!(
-            rt.record.get(0),
-            Ok(Value::from("there are 2.5 apples".to_owned()))
+            rt.record.get(0).unwrap(),
+            Value::from("there are 2.5 apples".to_owned())
         );
         assert_eq!(rt.vars.nf, 4);
 
@@ -587,14 +602,17 @@ mod tests {
         let expr = get_expr("$2 = $3 = 2");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("2".to_owned()));
-        assert_eq!(rt.record.get(0), Ok(Value::from("aaa 2 2".to_owned())));
+        assert_eq!(rt.record.get(0).unwrap(), Value::from("aaa 2 2".to_owned()));
         assert_eq!(rt.vars.nf, 3);
 
         rt.set_next_record("there are 5 apples".to_owned());
 
         let expr = get_expr("$3 /= 0");
         let res = eval_expr(&expr, &mut rt);
-        assert_eq!(res.unwrap_err(), EvaluationError::DivisionByZero);
+        match res.unwrap_err() {
+            EvaluationError::DivisionByZero => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
     }
 
     #[test]
@@ -604,18 +622,18 @@ mod tests {
         let expr = get_expr("a[0] = 42");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(42));
-        assert_eq!(rt.vars.get("a", Some("0")), Ok(Value::from(42)));
+        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::from(42));
 
         let expr = get_expr("a[0] /= 2");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(21));
-        assert_eq!(rt.vars.get("a", Some("0")), Ok(Value::from(21)));
+        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::from(21));
 
         let expr = get_expr("a[1] = 5");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(5));
-        assert_eq!(rt.vars.get("a", Some("1")), Ok(Value::from(5)));
-        assert_eq!(rt.vars.get("a", Some("0")), Ok(Value::from(21)));
+        assert_eq!(rt.vars.get("a", Some("1")).unwrap(), Value::from(5));
+        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::from(21));
     }
 
     #[test]
@@ -640,18 +658,18 @@ mod tests {
         let expr = get_expr("++a");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(16));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(16)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(16));
         // preincrement an array element
         let expr = get_expr("++b[0]");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(1));
-        assert_eq!(rt.vars.get("b", Some("0")), Ok(Value::from(1)));
+        assert_eq!(rt.vars.get("b", Some("0")).unwrap(), Value::from(1));
         // preincrement a field value
         rt.set_next_record("10".to_owned());
         let expr = get_expr("++$1");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("11".to_owned()));
-        assert_eq!(rt.record.get(1), Ok(Value::from("11".to_owned())));
+        assert_eq!(rt.record.get(1).unwrap(), Value::from("11".to_owned()));
     }
 
     #[test]
@@ -664,18 +682,18 @@ mod tests {
         let expr = get_expr("a++");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(15));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(16)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(16));
         // postincrement an array element
         let expr = get_expr("b[0]++");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
-        assert_eq!(rt.vars.get("b", Some("0")), Ok(Value::from(1)));
+        assert_eq!(rt.vars.get("b", Some("0")).unwrap(), Value::from(1));
         // postincrement a field value
         rt.set_next_record("10".to_owned());
         let expr = get_expr("$1++");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("10".to_owned()));
-        assert_eq!(rt.record.get(1), Ok(Value::from("11".to_owned())));
+        assert_eq!(rt.record.get(1).unwrap(), Value::from("11".to_owned()));
     }
 
     #[test]
@@ -688,18 +706,18 @@ mod tests {
         let expr = get_expr("--a");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(14));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(14)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(14));
         // preincrement an array element
         let expr = get_expr("--b[0]");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(-1));
-        assert_eq!(rt.vars.get("b", Some("0")), Ok(Value::from(-1)));
+        assert_eq!(rt.vars.get("b", Some("0")).unwrap(), Value::from(-1));
         // preincrement a field value
         rt.set_next_record("10".to_owned());
         let expr = get_expr("--$1");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("9".to_owned()));
-        assert_eq!(rt.record.get(1), Ok(Value::from("9".to_owned())));
+        assert_eq!(rt.record.get(1).unwrap(), Value::from("9".to_owned()));
     }
 
     #[test]
@@ -712,18 +730,18 @@ mod tests {
         let expr = get_expr("a--");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(15));
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(14)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(14));
         // postincrement an array element
         let expr = get_expr("b[0]--");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::Uninitialised);
-        assert_eq!(rt.vars.get("b", Some("0")), Ok(Value::from(-1)));
+        assert_eq!(rt.vars.get("b", Some("0")).unwrap(), Value::from(-1));
         // postincrement a field value
         rt.set_next_record("10".to_owned());
         let expr = get_expr("$1--");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from("10".to_owned()));
-        assert_eq!(rt.record.get(1), Ok(Value::from("9".to_owned())));
+        assert_eq!(rt.record.get(1).unwrap(), Value::from("9".to_owned()));
     }
 
     #[test]
@@ -772,6 +790,9 @@ mod tests {
 
         let expr = get_expr("FS[0]=42");
         let err = eval_expr(&expr, &mut rt).unwrap_err();
-        assert_eq!(err, EvaluationError::UseScalarAsArray);
+        match err {
+            EvaluationError::UseScalarAsArray => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
     }
 }

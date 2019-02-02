@@ -21,6 +21,18 @@ impl Eval for Stmt {
         funcs: &Functions,
     ) -> Result<Option<StmtResult>, EvaluationError> {
         match self {
+            Stmt::Print(exprs, redir) => {
+                for (i, expr) in exprs.0.iter().enumerate() {
+                    let val = expr.eval(vars, record, funcs)?;
+                    print!(
+                        "{}{}",
+                        val.as_string(),
+                        if i + 1 == exprs.len() { "" } else { &vars.ofs }
+                    );
+                }
+                print!("{}", vars.ors);
+                Ok(None)
+            },
             Stmt::ForIn(var, array, body) => {
                 for key in vars.array_keys(array)? {
                     vars.set(&AssignType::Normal, &var, None, Value::from(key.to_owned()))?;
@@ -138,8 +150,8 @@ mod tests {
         rt.set_next_record("1".to_owned());
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get("a", None),
-            Ok(Value::from("OK".to_owned())),
+            rt.vars.get("a", None).unwrap(),
+            Value::from("OK".to_owned()),
             "{:?}",
             stmt
         );
@@ -147,8 +159,8 @@ mod tests {
         rt.set_next_record("2".to_owned());
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get("a", None),
-            Ok(Value::from("KO".to_owned())),
+            rt.vars.get("a", None).unwrap(),
+            Value::from("KO".to_owned()),
             "{:?}",
             stmt
         );
@@ -156,8 +168,8 @@ mod tests {
         let stmt = get_stmt(r#"if ($1 == 2) a = "OK"; else a = "KO""#);
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get("a", None),
-            Ok(Value::from("OK".to_owned())),
+            rt.vars.get("a", None).unwrap(),
+            Value::from("OK".to_owned()),
             "{:?}",
             stmt
         );
@@ -168,7 +180,12 @@ mod tests {
         let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt("{ a = 1; b = 2; c = a + b }");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(rt.vars.get("c", None), Ok(Value::from(3.0)), "{:?}", stmt);
+        assert_eq!(
+            rt.vars.get("c", None).unwrap(),
+            Value::from(3.0),
+            "{:?}",
+            stmt
+        );
     }
 
     #[test]
@@ -176,11 +193,21 @@ mod tests {
         let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt("while (a < 5) a += 2");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(6.0)), "{:?}", stmt);
+        assert_eq!(
+            rt.vars.get("a", None).unwrap(),
+            Value::from(6.0),
+            "{:?}",
+            stmt
+        );
 
         let stmt = get_stmt("do a += 2; while (a < 5)");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(8.0)), "{:?}", stmt);
+        assert_eq!(
+            rt.vars.get("a", None).unwrap(),
+            Value::from(8.0),
+            "{:?}",
+            stmt
+        );
     }
 
     #[test]
@@ -189,8 +216,8 @@ mod tests {
         let stmt = get_stmt("for (i = 0; i < 5; i++) a = a i");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get("a", None),
-            Ok(Value::from("01234".to_owned())),
+            rt.vars.get("a", None).unwrap(),
+            Value::from("01234".to_owned()),
             "{:?}",
             stmt
         );
@@ -201,18 +228,28 @@ mod tests {
         let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt("while (a < 10) if (a < 5) a += 2; else break;");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(6.0)), "{:?}", stmt);
+        assert_eq!(
+            rt.vars.get("a", None).unwrap(),
+            Value::from(6.0),
+            "{:?}",
+            stmt
+        );
 
         let stmt = get_stmt("do if (b < 5) b += 2; else break; while (b < 10)");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(rt.vars.get("b", None), Ok(Value::from(6.0)), "{:?}", stmt);
+        assert_eq!(
+            rt.vars.get("b", None).unwrap(),
+            Value::from(6.0),
+            "{:?}",
+            stmt
+        );
 
         let stmt =
             get_stmt(r#"for (i = 0; i < 10; i++) { c = c i; if (c == "2100123") break; c = i c }"#);
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get("c", None),
-            Ok(Value::from("2100123".to_owned())),
+            rt.vars.get("c", None).unwrap(),
+            Value::from("2100123".to_owned()),
             "{:?}",
             stmt
         );
@@ -223,20 +260,40 @@ mod tests {
         let mut rt = Runtime::new(Program::empty()).unwrap();
         let stmt = get_stmt("while (a1 < 10) { a1++; if (a1 < 5) continue; a2++; }");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(rt.vars.get("a1", None), Ok(Value::from(10.0)), "{:?}", stmt);
-        assert_eq!(rt.vars.get("a2", None), Ok(Value::from(6.0)), "{:?}", stmt);
+        assert_eq!(
+            rt.vars.get("a1", None).unwrap(),
+            Value::from(10.0),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            rt.vars.get("a2", None).unwrap(),
+            Value::from(6.0),
+            "{:?}",
+            stmt
+        );
 
         let stmt = get_stmt("do { b1++; if (b1 < 5) continue; b2++; } while (b1 < 10)");
         eval_stmt(&stmt, &mut rt).unwrap();
-        assert_eq!(rt.vars.get("b1", None), Ok(Value::from(10.0)), "{:?}", stmt);
-        assert_eq!(rt.vars.get("b2", None), Ok(Value::from(6.0)), "{:?}", stmt);
+        assert_eq!(
+            rt.vars.get("b1", None).unwrap(),
+            Value::from(10.0),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            rt.vars.get("b2", None).unwrap(),
+            Value::from(6.0),
+            "{:?}",
+            stmt
+        );
 
         let stmt =
             get_stmt(r#"for (i = 0; i < 5; i++) { c = c i; if (c % 2 == 0) continue; c = i c }"#);
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get("c", None),
-            Ok(Value::from("3101234".to_owned())),
+            rt.vars.get("c", None).unwrap(),
+            Value::from("3101234".to_owned()),
             "{:?}",
             stmt
         );
@@ -258,26 +315,26 @@ mod tests {
         );
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get("a", Some("0")),
-            Ok(Value::from(10.0)),
+            rt.vars.get("a", Some("0")).unwrap(),
+            Value::from(10.0),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get("a", Some("1")),
-            Ok(Value::from(20.0)),
+            rt.vars.get("a", Some("1")).unwrap(),
+            Value::from(20.0),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get("a", Some("2")),
-            Ok(Value::from(30.0)),
+            rt.vars.get("a", Some("2")).unwrap(),
+            Value::from(30.0),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get("a", Some("3")),
-            Ok(Value::from(40.0)),
+            rt.vars.get("a", Some("3")).unwrap(),
+            Value::from(40.0),
             "{:?}",
             stmt
         );
@@ -301,26 +358,26 @@ mod tests {
         );
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
-            rt.vars.get("a", Some("0")),
-            Ok(Value::Uninitialised),
+            rt.vars.get("a", Some("0")).unwrap(),
+            Value::Uninitialised,
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get("a", Some("1")),
-            Ok(Value::Uninitialised),
+            rt.vars.get("a", Some("1")).unwrap(),
+            Value::Uninitialised,
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get("a", Some("2")),
-            Ok(Value::from(15.0)),
+            rt.vars.get("a", Some("2")).unwrap(),
+            Value::from(15.0),
             "{:?}",
             stmt
         );
         assert_eq!(
-            rt.vars.get("a", Some("3")),
-            Ok(Value::from(20.0)),
+            rt.vars.get("a", Some("3")).unwrap(),
+            Value::from(20.0),
             "{:?}",
             stmt
         );

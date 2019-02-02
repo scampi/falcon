@@ -156,26 +156,31 @@ mod tests {
                { a = 42; adder(2); }"#,
         );
 
-        let err = Runtime::new(prog).unwrap_err();
-        assert_eq!(err, EvaluationError::DuplicateFunction("adder".to_owned()));
+        match Runtime::new(prog).unwrap_err() {
+            EvaluationError::DuplicateFunction(ref name) if name == "adder" => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
 
         let prog = get_program("function adder(var) { return 1 } { a = 42; adder(2, 3); }");
         let mut rt = Runtime::new(prog).unwrap();
-        let err = rt.execute_main_patterns().unwrap_err();
-        assert_eq!(
-            err,
-            EvaluationError::TooManyArguments("adder".to_owned(), 2, 1)
-        );
+        match rt.execute_main_patterns().unwrap_err() {
+            EvaluationError::TooManyArguments(ref name, 2, 1) if name == "adder" => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
 
         let prog = get_program("function f(a) { a = 1 } { arr[0] = 42; f(arr) }");
         let mut rt = Runtime::new(prog).unwrap();
-        let err = rt.execute_main_patterns().unwrap_err();
-        assert_eq!(err, EvaluationError::UseArrayInScalarContext);
+        match rt.execute_main_patterns().unwrap_err() {
+            EvaluationError::UseArrayInScalarContext => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
 
         let prog = get_program("function f(a) { a[0] = 1 } { f(42) }");
         let mut rt = Runtime::new(prog).unwrap();
-        let err = rt.execute_main_patterns().unwrap_err();
-        assert_eq!(err, EvaluationError::UseScalarAsArray);
+        match rt.execute_main_patterns().unwrap_err() {
+            EvaluationError::UseScalarAsArray => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
     }
 
     #[test]
@@ -184,15 +189,15 @@ mod tests {
         let prog = get_program("function adder(var) { a += var } { a = 42; adder(2); }");
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(44)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(44));
 
         // initialize a global variable and mutate a local variable with the same name
         // as a global variable
         let prog = get_program("function adder(a) { a += 10; b = a; } { a = 1; adder(5); }");
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(1)));
-        assert_eq!(rt.vars.get("b", None), Ok(Value::from(15)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(1));
+        assert_eq!(rt.vars.get("b", None).unwrap(), Value::from(15));
 
         // assign return value of a function
         let prog = get_program(
@@ -202,8 +207,8 @@ mod tests {
         );
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("a", None), Ok(Value::Uninitialised));
-        assert_eq!(rt.vars.get("b", None), Ok(Value::from(25)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::Uninitialised);
+        assert_eq!(rt.vars.get("b", None).unwrap(), Value::from(25));
 
         // ensure function-locality of variables
         let prog = get_program(
@@ -213,14 +218,14 @@ mod tests {
         );
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("b", None), Ok(Value::from(11)));
+        assert_eq!(rt.vars.get("b", None).unwrap(), Value::from(11));
 
         // declare the variable "b" scoped to the function
         let prog = get_program("function adder(a, b) { a += 10; b = a; } { a = 1; adder(5); }");
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(1)));
-        assert_eq!(rt.vars.get("b", None), Ok(Value::Uninitialised));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(1));
+        assert_eq!(rt.vars.get("b", None).unwrap(), Value::Uninitialised);
 
         // call another function from a function to verify locals are properly handled
         let prog = get_program(
@@ -230,7 +235,7 @@ mod tests {
         );
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(20)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(20));
 
         // variable local to a function should be overridden if used in loop
         let prog = get_program(
@@ -243,7 +248,7 @@ mod tests {
         );
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("a", None), Ok(Value::from(10)));
+        assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(10));
     }
 
     #[test]
@@ -252,7 +257,7 @@ mod tests {
         let prog = get_program("function adder(var) { a[0] += var } { a[0] = 42; adder(2); }");
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("a", Some("0")), Ok(Value::from(44)));
+        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::from(44));
 
         // update local array
         let prog = get_program(
@@ -270,7 +275,7 @@ mod tests {
         );
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("result", None), Ok(Value::from(8)));
+        assert_eq!(rt.vars.get("result", None).unwrap(), Value::from(8));
 
         // pass array as argument
         let prog = get_program(
@@ -291,14 +296,14 @@ mod tests {
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(
-            rt.vars.get("result", None),
-            Ok(Value::from(11)),
+            rt.vars.get("result", None).unwrap(),
+            Value::from(11),
             "{:?}",
             rt.vars
         );
         assert_eq!(
-            rt.vars.get("c", None),
-            Ok(Value::Uninitialised),
+            rt.vars.get("c", None).unwrap(),
+            Value::Uninitialised,
             "{:?}",
             rt.vars
         );
@@ -317,7 +322,7 @@ mod tests {
         );
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("my_array", Some("0")), Ok(Value::from(6)));
+        assert_eq!(rt.vars.get("my_array", Some("0")).unwrap(), Value::from(6));
 
         // delete an element of an array by reference
         let prog = get_program(
@@ -334,24 +339,31 @@ mod tests {
         );
         let mut rt = Runtime::new(prog).unwrap();
         rt.execute_main_patterns().unwrap();
-        assert_eq!(rt.vars.get("my_array", Some("0")), Ok(Value::Uninitialised));
-        assert_eq!(rt.vars.get("my_array", Some("1")), Ok(Value::from(6)));
+        assert_eq!(
+            rt.vars.get("my_array", Some("0")).unwrap(),
+            Value::Uninitialised
+        );
+        assert_eq!(rt.vars.get("my_array", Some("1")).unwrap(), Value::from(6));
     }
 
     #[test]
     fn assign_array() {
         let prog = get_program("{ a[0] = 42; b = a; }");
         let mut rt = Runtime::new(prog).unwrap();
-        let err = rt.execute_main_patterns().unwrap_err();
-        assert_eq!(err, EvaluationError::UseArrayInScalarContext);
+        match rt.execute_main_patterns().unwrap_err() {
+            EvaluationError::UseArrayInScalarContext => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
     }
 
     #[test]
     fn use_scalar_with_for_in() {
         let prog = get_program("{ a = 42; for (i in a) continue; }");
         let mut rt = Runtime::new(prog).unwrap();
-        let err = rt.execute_main_patterns().unwrap_err();
-        assert_eq!(err, EvaluationError::UseScalarAsArray);
+        match rt.execute_main_patterns().unwrap_err() {
+            EvaluationError::UseScalarAsArray => (),
+            err @ _ => panic!("Unexpected error: {}", err),
+        };
     }
 
     #[test]
@@ -371,13 +383,16 @@ mod tests {
         rt.execute_end_patterns().unwrap();
 
         assert_eq!(
-            rt.vars.get("firstname", None),
-            Ok(Value::from("john".to_owned()))
+            rt.vars.get("firstname", None).unwrap(),
+            Value::from("john".to_owned())
         );
-        assert_eq!(rt.vars.get("c", None), Ok(Value::from("john, ".to_owned())));
         assert_eq!(
-            rt.vars.get("fullname", None),
-            Ok(Value::from("john, connor".to_owned()))
+            rt.vars.get("c", None).unwrap(),
+            Value::from("john, ".to_owned())
+        );
+        assert_eq!(
+            rt.vars.get("fullname", None).unwrap(),
+            Value::from("john, connor".to_owned())
         );
 
         // access FNR parameter
@@ -397,8 +412,8 @@ mod tests {
         }
         rt.execute_end_patterns().unwrap();
 
-        assert_eq!(rt.vars.get("begin_fnr", None), Ok(Value::from(0)));
-        assert_eq!(rt.vars.get("end_fnr", None), Ok(Value::from(2)));
+        assert_eq!(rt.vars.get("begin_fnr", None).unwrap(), Value::from(0));
+        assert_eq!(rt.vars.get("end_fnr", None).unwrap(), Value::from(2));
 
         // access NF parameter
         let input = "a b c\na b";
@@ -418,10 +433,10 @@ mod tests {
         }
         rt.execute_end_patterns().unwrap();
 
-        assert_eq!(rt.vars.get("begin_nf", None), Ok(Value::from(0)));
-        assert_eq!(rt.vars.get("inside_nf", Some("1")), Ok(Value::from(3)));
-        assert_eq!(rt.vars.get("inside_nf", Some("2")), Ok(Value::from(2)));
-        assert_eq!(rt.vars.get("end_nf", None), Ok(Value::from(2)));
+        assert_eq!(rt.vars.get("begin_nf", None).unwrap(), Value::from(0));
+        assert_eq!(rt.vars.get("inside_nf", Some("1")).unwrap(), Value::from(3));
+        assert_eq!(rt.vars.get("inside_nf", Some("2")).unwrap(), Value::from(2));
+        assert_eq!(rt.vars.get("end_nf", None).unwrap(), Value::from(2));
     }
 
     #[test]
@@ -444,12 +459,12 @@ mod tests {
         keys.sort_unstable();
         assert_eq!(keys, vec!["1".to_owned(), "3".to_owned()]);
         assert_eq!(
-            rt.vars.get("name", Some("1")),
-            Ok(Value::from("peppa".to_owned()))
+            rt.vars.get("name", Some("1")).unwrap(),
+            Value::from("peppa".to_owned())
         );
         assert_eq!(
-            rt.vars.get("name", Some("3")),
-            Ok(Value::from("shaun".to_owned()))
+            rt.vars.get("name", Some("3")).unwrap(),
+            Value::from("shaun".to_owned())
         );
     }
 
@@ -465,8 +480,8 @@ mod tests {
             rt.execute_main_patterns().unwrap();
         }
         assert_eq!(
-            rt.vars.get("c", None),
-            Ok(Value::from(" 2:1 3:2 4:3 6:1 7:2 8:3".to_owned()))
+            rt.vars.get("c", None).unwrap(),
+            Value::from(" 2:1 3:2 4:3 6:1 7:2 8:3".to_owned())
         );
 
         // range starting and ending on the same line
@@ -495,12 +510,12 @@ a b"#;
         keys.sort_unstable();
         assert_eq!(keys, vec!["3".to_owned(), "7".to_owned()]);
         assert_eq!(
-            rt.vars.get("c", Some("3")),
-            Ok(Value::from("bb john connor".to_owned()))
+            rt.vars.get("c", Some("3")).unwrap(),
+            Value::from("bb john connor".to_owned())
         );
         assert_eq!(
-            rt.vars.get("c", Some("7")),
-            Ok(Value::from("bb john connor".to_owned()))
+            rt.vars.get("c", Some("7")).unwrap(),
+            Value::from("bb john connor".to_owned())
         );
     }
 
@@ -513,22 +528,27 @@ a b"#;
         rt.set_next_record(input.to_owned());
         rt.execute_main_patterns().unwrap();
         assert_eq!(
-            rt.vars.get("a", None),
-            Ok(Value::from("aaa".to_owned()))
+            rt.vars.get("a", None).unwrap(),
+            Value::from("aaa".to_owned())
         );
         assert_eq!(
-            rt.vars.get("b", None),
-            Ok(Value::from("bbb".to_owned()))
+            rt.vars.get("b", None).unwrap(),
+            Value::from("bbb".to_owned())
         );
         assert_eq!(
-            rt.vars.get("c", None),
-            Ok(Value::from("ccc".to_owned()))
+            rt.vars.get("c", None).unwrap(),
+            Value::from("ccc".to_owned())
         );
     }
 
     #[test]
     fn custom_fs_value() {
-        let prog_str = |fs: &str| format!("BEGIN {{ FS=\"{}\" }} {{ for (i = 1; i <= NF; i++) arr[i] = $i }}", fs);
+        let prog_str = |fs: &str| {
+            format!(
+                "BEGIN {{ FS=\"{}\" }} {{ for (i = 1; i <= NF; i++) arr[i] = $i }}",
+                fs
+            )
+        };
 
         let input = "a.b";
         let prog = get_program(&prog_str("."));
@@ -539,12 +559,12 @@ a b"#;
         let keys = rt.vars.array_keys("arr").unwrap();
         assert_eq!(keys.len(), 2);
         assert_eq!(
-            rt.vars.get("arr", Some("1")),
-            Ok(Value::from("a".to_owned()))
+            rt.vars.get("arr", Some("1")).unwrap(),
+            Value::from("a".to_owned())
         );
         assert_eq!(
-            rt.vars.get("arr", Some("2")),
-            Ok(Value::from("b".to_owned()))
+            rt.vars.get("arr", Some("2")).unwrap(),
+            Value::from("b".to_owned())
         );
 
         let input = "aahereayouaaaawereaaaaaa";
@@ -556,16 +576,16 @@ a b"#;
         let keys = rt.vars.array_keys("arr").unwrap();
         assert_eq!(keys.len(), 3);
         assert_eq!(
-            rt.vars.get("arr", Some("1")),
-            Ok(Value::from("here".to_owned()))
+            rt.vars.get("arr", Some("1")).unwrap(),
+            Value::from("here".to_owned())
         );
         assert_eq!(
-            rt.vars.get("arr", Some("2")),
-            Ok(Value::from("you".to_owned()))
+            rt.vars.get("arr", Some("2")).unwrap(),
+            Value::from("you".to_owned())
         );
         assert_eq!(
-            rt.vars.get("arr", Some("3")),
-            Ok(Value::from("were".to_owned()))
+            rt.vars.get("arr", Some("3")).unwrap(),
+            Value::from("were".to_owned())
         );
 
         let input = "abcthisadcarcisaechere";
@@ -577,20 +597,20 @@ a b"#;
         let keys = rt.vars.array_keys("arr").unwrap();
         assert_eq!(keys.len(), 4);
         assert_eq!(
-            rt.vars.get("arr", Some("1")),
-            Ok(Value::from("this".to_owned()))
+            rt.vars.get("arr", Some("1")).unwrap(),
+            Value::from("this".to_owned())
         );
         assert_eq!(
-            rt.vars.get("arr", Some("2")),
-            Ok(Value::from(String::new()))
+            rt.vars.get("arr", Some("2")).unwrap(),
+            Value::from(String::new())
         );
         assert_eq!(
-            rt.vars.get("arr", Some("3")),
-            Ok(Value::from("is".to_owned()))
+            rt.vars.get("arr", Some("3")).unwrap(),
+            Value::from("is".to_owned())
         );
         assert_eq!(
-            rt.vars.get("arr", Some("4")),
-            Ok(Value::from("here".to_owned()))
+            rt.vars.get("arr", Some("4")).unwrap(),
+            Value::from("here".to_owned())
         );
 
         let input = "abcthisadcarcisaechere";
@@ -602,16 +622,16 @@ a b"#;
         let keys = rt.vars.array_keys("arr").unwrap();
         assert_eq!(keys.len(), 3);
         assert_eq!(
-            rt.vars.get("arr", Some("1")),
-            Ok(Value::from("this".to_owned()))
+            rt.vars.get("arr", Some("1")).unwrap(),
+            Value::from("this".to_owned())
         );
         assert_eq!(
-            rt.vars.get("arr", Some("2")),
-            Ok(Value::from("is".to_owned()))
+            rt.vars.get("arr", Some("2")).unwrap(),
+            Value::from("is".to_owned())
         );
         assert_eq!(
-            rt.vars.get("arr", Some("3")),
-            Ok(Value::from("here".to_owned()))
+            rt.vars.get("arr", Some("3")).unwrap(),
+            Value::from("here".to_owned())
         );
     }
 }

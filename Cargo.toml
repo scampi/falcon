@@ -1,6 +1,7 @@
 [package]
 name = "falcon"
 version = "0.1.0"
+description = "An AWK interpreter"
 authors = ["Stéphane Campinas <stephane.campinas@gmail.com>"]
 license = "MIT"
 edition = "2018"
@@ -11,3 +12,5 @@ failure = "0.1.3"
 failure_derive = "0.1.3"
 regex = "1.1.0"
 lazy_static = "1.2.0"
+structopt = "0.2.14"
+exitcode = "1.1.2"

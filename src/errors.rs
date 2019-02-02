@@ -1,6 +1,6 @@
 use failure_derive::Fail;
 
-#[derive(PartialEq, Debug, Fail)]
+#[derive(Debug, Fail)]
 pub enum EvaluationError {
     #[fail(display = "division by zero attempted")]
     DivisionByZero,
@@ -21,9 +21,11 @@ pub enum EvaluationError {
     UseArrayInScalarContext,
     #[fail(display = "Attempt to use a scalar as an array")]
     UseScalarAsArray,
+    #[fail(display = "{}: {}", _0, _1)]
+    IoError(String, std::io::Error),
 }
 
-#[derive(PartialEq, Debug, Fail)]
+#[derive(Debug, Fail)]
 pub enum ParseError {
     #[fail(display = "Function {} has duplicate parameters", _0)]
     DuplicateParams(String),
@@ -31,4 +33,18 @@ pub enum ParseError {
     InvalidName(String),
     #[fail(display = "Cannot use a special variable as a function parameter")]
     SpecialVariableAsParameter,
+    #[fail(display = "Failed to parse program")]
+    LeftOver,
+    #[fail(display = "{}", _0)]
+    CombineError(String),
+}
+
+impl From<combine::stream::easy::Errors<char, &str, combine::stream::state::SourcePosition>>
+    for ParseError
+{
+    fn from(
+        e: combine::stream::easy::Errors<char, &str, combine::stream::state::SourcePosition>,
+    ) -> ParseError {
+        ParseError::CombineError(format!("{}", e))
+    }
 }

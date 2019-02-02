@@ -45,8 +45,8 @@ pub struct Variables {
     /// The ordinal number of the current record from the start of input
     pub nr: usize,
     //ofmt: String,
-    //ofs: String,
-    //ors: String,
+    pub ofs: String,
+    pub ors: String,
     //rlength: usize,
     //rs: String,
     //rstart: usize,
@@ -62,6 +62,8 @@ impl Variables {
             fs: String::from(" "),
             nf: 0,
             nr: 0,
+            ofs: String::from(" "),
+            ors: String::from("\n"),
             subsep: String::new(),
         }
     }
@@ -69,6 +71,13 @@ impl Variables {
     #[cfg(test)]
     pub fn has_user_vars(&self) -> bool {
         !self.globals.is_empty()
+    }
+
+    fn is_special_variable(&self, name: &str) -> bool {
+        match name {
+            "FNR" | "FS" | "NF" | "NR" | "OFS" | "ORS" | "SUBSEP" => true,
+            _ => false,
+        }
     }
 
     pub fn push_local_stack(
@@ -167,13 +176,15 @@ impl Variables {
 
     pub fn get(&self, name: &str, subscript: Option<&str>) -> Result<Value, EvaluationError> {
         match name {
-            "FNR" | "FS" | "NF" | "NR" | "SUBSEP" if subscript.is_some() => {
+            _ if self.is_special_variable(name) && subscript.is_some() => {
                 Err(EvaluationError::UseScalarAsArray)
             },
             "FNR" => Ok(Value::from(self.fnr)),
             "FS" => Ok(Value::from(self.fs.to_owned())),
             "NF" => Ok(Value::from(self.nf)),
             "NR" => Ok(Value::from(self.nr)),
+            "OFS" => Ok(Value::from(self.ofs.to_owned())),
+            "ORS" => Ok(Value::from(self.ors.to_owned())),
             "SUBSEP" => Ok(Value::from(self.subsep.to_owned())),
             _ => {
                 if let Some(value) = self.get_local_var(name, subscript) {
@@ -229,7 +240,7 @@ impl Variables {
         new_value: Value,
     ) -> Result<Value, EvaluationError> {
         match name {
-            "FNR" | "FS" | "NF" | "NR" | "SUBSEP" if subscript.is_some() => {
+            _ if self.is_special_variable(name) && subscript.is_some() => {
                 Err(EvaluationError::UseScalarAsArray)
             },
             "FNR" => {
@@ -251,6 +262,16 @@ impl Variables {
                 let result = Value::compute(ty, Value::from(self.nr), new_value)?;
                 self.nr = result.as_number() as usize;
                 Ok(Value::from(self.nr))
+            },
+            "OFS" => {
+                let result = Value::compute(ty, Value::from(self.ofs.to_owned()), new_value)?;
+                self.ofs = result.as_string();
+                Ok(Value::from(self.ofs.to_owned()))
+            },
+            "ORS" => {
+                let result = Value::compute(ty, Value::from(self.ors.to_owned()), new_value)?;
+                self.ors = result.as_string();
+                Ok(Value::from(self.ors.to_owned()))
             },
             "SUBSEP" => {
                 let result = Value::compute(ty, Value::from(self.subsep.to_owned()), new_value)?;
