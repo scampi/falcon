@@ -1,8 +1,4 @@
-use crate::{
-    errors::EvaluationError,
-    interpreter::{functions::Functions, record::Record, value::Value, Eval},
-    parser::ast::{AssignType, Expr, ExprList, LValueType},
-};
+use crate::{errors::EvaluationError, interpreter::value::Value, parser::ast::AssignType};
 use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Debug)]
@@ -26,7 +22,7 @@ impl FunctionCall {
 
 #[derive(Debug)]
 pub struct Variables {
-    globals: HashMap<String, Value>,
+    pub globals: HashMap<String, Value>,
     locals: Vec<FunctionCall>,
     ///// The number of arguments
     //argc: usize,
@@ -82,35 +78,10 @@ impl Variables {
 
     pub fn push_local_stack(
         &mut self,
-        params: &[String],
-        args: &ExprList,
-        record: &mut Record,
-        funcs: &Functions,
-    ) -> Result<(), EvaluationError> {
-        let mut locals = HashMap::new();
-        let mut references = HashMap::new();
-        let mut params_iter = params.iter();
-
-        // The iterator for args needs to be called first since it may be shorter than
-        // params. Zip will short-circuit and not call next on params_iter if args is
-        // smaller. This allows to fill the locals map with any remaining params.
-        for (arg, param) in args.0.iter().zip(params_iter.by_ref()) {
-            // Arrays are passed by reference and so the param will refer to the
-            // globally defined array instead of creating a new one within the
-            // function's scope.
-            if let Expr::LValue(LValueType::Name(name)) = arg {
-                if let Some(Value::Array(_)) = self.globals.get(name) {
-                    references.insert(param.to_owned(), name.to_owned());
-                    continue;
-                }
-            }
-            locals.insert(param.to_owned(), arg.eval(self, record, funcs)?);
-        }
-        for param in params_iter {
-            locals.insert(param.to_owned(), Value::Uninitialised);
-        }
+        locals: HashMap<String, Value>,
+        references: HashMap<String, String>,
+    ) {
         self.locals.push(FunctionCall { locals, references });
-        Ok(())
     }
 
     pub fn pop_local_stack(&mut self) {

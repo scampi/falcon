@@ -20,6 +20,26 @@ pub struct Runtime {
     patterns: Vec<EvalItem>,
 }
 
+pub struct RuntimeMut<'a> {
+    vars: &'a mut variables::Variables,
+    record: &'a mut record::Record,
+    funcs: &'a functions::Functions,
+}
+
+impl<'a> RuntimeMut<'a> {
+    fn new(
+        vars: &'a mut variables::Variables,
+        record: &'a mut record::Record,
+        funcs: &'a functions::Functions,
+    ) -> RuntimeMut<'a> {
+        RuntimeMut {
+            vars,
+            record,
+            funcs,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct EvalItem {
     item: Item,
@@ -64,10 +84,11 @@ impl Runtime {
     }
 
     pub fn execute_begin_patterns(&mut self) -> Result<(), EvaluationError> {
+        let mut rt_mut = RuntimeMut::new(&mut self.vars, &mut self.record, &self.funcs);
         for pattern in &self.begin_patterns {
             if let Item::PatternAction(Some(Pattern::Begin), stmts) = pattern {
                 for stmt in &stmts.0 {
-                    stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
+                    stmt.eval(&mut rt_mut)?;
                 }
             } else {
                 unreachable!()
@@ -77,10 +98,11 @@ impl Runtime {
     }
 
     pub fn execute_end_patterns(&mut self) -> Result<(), EvaluationError> {
+        let mut rt_mut = RuntimeMut::new(&mut self.vars, &mut self.record, &self.funcs);
         for pattern in &self.end_patterns {
             if let Item::PatternAction(Some(Pattern::End), stmts) = pattern {
                 for stmt in &stmts.0 {
-                    stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
+                    stmt.eval(&mut rt_mut)?;
                 }
             } else {
                 unreachable!()
@@ -90,35 +112,28 @@ impl Runtime {
     }
 
     pub fn execute_main_patterns(&mut self) -> Result<(), EvaluationError> {
+        let mut rt_mut = RuntimeMut::new(&mut self.vars, &mut self.record, &self.funcs);
         for eval_item in self.patterns.iter_mut() {
             if let Item::PatternAction(pattern, stmts) = &eval_item.item {
                 match pattern {
                     None => {
                         for stmt in &stmts.0 {
-                            stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
+                            stmt.eval(&mut rt_mut)?;
                         }
                     },
                     Some(Pattern::Expr(expr)) => {
-                        if expr
-                            .eval(&mut self.vars, &mut self.record, &mut self.funcs)?
-                            .as_bool()
-                        {
+                        if expr.eval(&mut rt_mut)?.as_bool() {
                             for stmt in &stmts.0 {
-                                stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
+                                stmt.eval(&mut rt_mut)?;
                             }
                         }
                     },
                     Some(Pattern::Range(start, end)) => {
-                        let execute = eval_item.in_range
-                            || start
-                                .eval(&mut self.vars, &mut self.record, &mut self.funcs)?
-                                .as_bool();
+                        let execute = eval_item.in_range || start.eval(&mut rt_mut)?.as_bool();
                         if execute {
-                            eval_item.in_range = !end
-                                .eval(&mut self.vars, &mut self.record, &mut self.funcs)?
-                                .as_bool();
+                            eval_item.in_range = !end.eval(&mut rt_mut)?.as_bool();
                             for stmt in &stmts.0 {
-                                stmt.eval(&mut self.vars, &mut self.record, &mut self.funcs)?;
+                                stmt.eval(&mut rt_mut)?;
                             }
                         }
                     },
@@ -132,12 +147,7 @@ impl Runtime {
 
 trait Eval {
     type EvalResult;
-    fn eval<'a>(
-        &self,
-        vars: &'a mut variables::Variables,
-        record: &mut record::Record,
-        funcs: &functions::Functions,
-    ) -> Result<Self::EvalResult, EvaluationError>;
+    fn eval(&self, rt: &mut RuntimeMut) -> Result<Self::EvalResult, EvaluationError>;
 }
 
 #[cfg(test)]

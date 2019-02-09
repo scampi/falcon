@@ -1,21 +1,16 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{functions::Functions, record::Record, value::Value, variables::Variables, Eval},
+    interpreter::{value::Value, variables::Variables, Eval, RuntimeMut},
     parser::ast::{AssignType, Expr, ExprList, LValueType},
 };
 use regex::Regex;
 
 impl Eval for ExprList {
     type EvalResult = Vec<Value>;
-    fn eval<'a>(
-        &self,
-        vars: &'a mut Variables,
-        record: &mut Record,
-        funcs: &Functions,
-    ) -> Result<Vec<Value>, EvaluationError> {
+    fn eval(&self, rt: &mut RuntimeMut) -> Result<Vec<Value>, EvaluationError> {
         let mut values = Vec::with_capacity(self.len());
         for expr in &self.0 {
-            values.push(expr.eval(vars, record, funcs)?);
+            values.push(expr.eval(rt)?);
         }
         Ok(values)
     }
@@ -23,170 +18,165 @@ impl Eval for ExprList {
 
 impl Eval for Expr {
     type EvalResult = Value;
-    fn eval<'a>(
-        &self,
-        vars: &'a mut Variables,
-        record: &mut Record,
-        funcs: &Functions,
-    ) -> Result<Value, EvaluationError> {
+    fn eval(&self, rt: &mut RuntimeMut) -> Result<Value, EvaluationError> {
         match self {
             Expr::Mod(l, r) => Ok(Value::from(
-                l.eval(vars, record, funcs)?.as_number() % r.eval(vars, record, funcs)?.as_number(),
+                l.eval(rt)?.as_number() % r.eval(rt)?.as_number(),
             )),
             Expr::Pow(l, r) => Ok(Value::from(
-                l.eval(vars, record, funcs)?
-                    .as_number()
-                    .powf(r.eval(vars, record, funcs)?.as_number()),
+                l.eval(rt)?.as_number().powf(r.eval(rt)?.as_number()),
             )),
             Expr::Add(l, r) => Ok(Value::from(
-                l.eval(vars, record, funcs)?.as_number() + r.eval(vars, record, funcs)?.as_number(),
+                l.eval(rt)?.as_number() + r.eval(rt)?.as_number(),
             )),
             Expr::Minus(l, r) => Ok(Value::from(
-                l.eval(vars, record, funcs)?.as_number() - r.eval(vars, record, funcs)?.as_number(),
+                l.eval(rt)?.as_number() - r.eval(rt)?.as_number(),
             )),
             Expr::Div(l, r) => {
-                let rvalue = r.eval(vars, record, funcs)?.as_number();
+                let rvalue = r.eval(rt)?.as_number();
                 if rvalue == 0.0 {
                     return Err(EvaluationError::DivisionByZero);
                 }
-                Ok(Value::from(
-                    l.eval(vars, record, funcs)?.as_number() / rvalue,
-                ))
+                Ok(Value::from(l.eval(rt)?.as_number() / rvalue))
             },
             Expr::Mul(l, r) => Ok(Value::from(
-                l.eval(vars, record, funcs)?.as_number() * r.eval(vars, record, funcs)?.as_number(),
+                l.eval(rt)?.as_number() * r.eval(rt)?.as_number(),
             )),
             Expr::Comparison(op, l, r) => {
-                let lvalue = l.eval(vars, record, funcs)?;
-                let rvalue = r.eval(vars, record, funcs)?;
+                let lvalue = l.eval(rt)?;
+                let rvalue = r.eval(rt)?;
                 Ok(Value::compare(op, &lvalue, &rvalue))
             },
-            Expr::Concat(l, r) => Ok(Value::String(format!(
-                "{}{}",
-                l.eval(vars, record, funcs)?,
-                r.eval(vars, record, funcs)?
-            ))),
+            Expr::Concat(l, r) => Ok(Value::String(format!("{}{}", l.eval(rt)?, r.eval(rt)?))),
             Expr::LogicalAnd(l, r) => {
-                if l.eval(vars, record, funcs)?.as_bool() {
-                    Ok(Value::from(r.eval(vars, record, funcs)?.as_bool()))
+                if l.eval(rt)?.as_bool() {
+                    Ok(Value::from(r.eval(rt)?.as_bool()))
                 } else {
                     Ok(Value::from(false))
                 }
             },
             Expr::LogicalOr(l, r) => {
-                if l.eval(vars, record, funcs)?.as_bool() {
+                if l.eval(rt)?.as_bool() {
                     Ok(Value::from(true))
                 } else {
-                    Ok(Value::from(r.eval(vars, record, funcs)?.as_bool()))
+                    Ok(Value::from(r.eval(rt)?.as_bool()))
                 }
             },
-            Expr::LogicalNot(e) => Ok(Value::from(!e.eval(vars, record, funcs)?.as_bool())),
+            Expr::LogicalNot(e) => Ok(Value::from(!e.eval(rt)?.as_bool())),
             Expr::Conditional(cond, ok, ko) => {
-                if cond.eval(vars, record, funcs)?.as_bool() {
-                    Ok(Value::from(ok.eval(vars, record, funcs)?))
+                if cond.eval(rt)?.as_bool() {
+                    Ok(Value::from(ok.eval(rt)?))
                 } else {
-                    Ok(Value::from(ko.eval(vars, record, funcs)?))
+                    Ok(Value::from(ko.eval(rt)?))
                 }
             },
             Expr::LValue(lvalue) => match lvalue {
-                LValueType::Name(name) => vars.get(name, None),
+                LValueType::Name(name) => rt.vars.get(name, None),
                 LValueType::Dollar(e) => {
-                    let index = e.eval(vars, record, funcs)?.as_number() as isize;
-                    record.get(index)
+                    let index = e.eval(rt)?.as_number() as isize;
+                    rt.record.get(index)
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    vars.get(name, Some(&key_str))
+                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    rt.vars.get(name, Some(&key_str))
                 },
             },
             Expr::Assign(ty, lvalue, rvalue) => {
-                let new_value = rvalue.eval(vars, record, funcs)?;
+                let new_value = rvalue.eval(rt)?;
                 match lvalue {
-                    LValueType::Name(name) => vars.set(ty, name, None, new_value),
+                    LValueType::Name(name) => rt.vars.set(ty, name, None, new_value),
                     LValueType::Dollar(e) => {
-                        let index = e.eval(vars, record, funcs)?.as_number() as isize;
-                        record.set(vars, ty, index, new_value)
+                        let index = e.eval(rt)?.as_number() as isize;
+                        rt.record.set(&mut rt.vars, ty, index, new_value)
                     },
                     LValueType::Brackets(name, key) => {
-                        let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                        vars.set(ty, name, Some(&key_str), new_value)
+                        let key_str = Variables::array_key(key.eval(rt)?)?;
+                        rt.vars.set(ty, name, Some(&key_str), new_value)
                     },
                 }
             },
             Expr::PreIncrement(lvalue) => match lvalue {
-                LValueType::Name(name) => vars.set(&AssignType::Add, name, None, Value::from(1)),
+                LValueType::Name(name) => rt.vars.set(&AssignType::Add, name, None, Value::from(1)),
                 LValueType::Dollar(e) => {
-                    let index = e.eval(vars, record, funcs)?.as_number() as isize;
-                    record.set(vars, &AssignType::Add, index, Value::from(1))
+                    let index = e.eval(rt)?.as_number() as isize;
+                    rt.record
+                        .set(&mut rt.vars, &AssignType::Add, index, Value::from(1))
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    vars.set(&AssignType::Add, name, Some(&key_str), Value::from(1))
+                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    rt.vars
+                        .set(&AssignType::Add, name, Some(&key_str), Value::from(1))
                 },
             },
             Expr::PreDecrement(lvalue) => match lvalue {
-                LValueType::Name(name) => vars.set(&AssignType::Sub, name, None, Value::from(1)),
+                LValueType::Name(name) => rt.vars.set(&AssignType::Sub, name, None, Value::from(1)),
                 LValueType::Dollar(e) => {
-                    let index = e.eval(vars, record, funcs)?.as_number() as isize;
-                    record.set(vars, &AssignType::Sub, index, Value::from(1))
+                    let index = e.eval(rt)?.as_number() as isize;
+                    rt.record
+                        .set(&mut rt.vars, &AssignType::Sub, index, Value::from(1))
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    vars.set(&AssignType::Sub, name, Some(&key_str), Value::from(1))
+                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    rt.vars
+                        .set(&AssignType::Sub, name, Some(&key_str), Value::from(1))
                 },
             },
             Expr::PostIncrement(lvalue) => match lvalue {
                 LValueType::Name(name) => {
-                    let value = vars.get(name, None);
-                    vars.set(&AssignType::Add, name, None, Value::from(1))?;
+                    let value = rt.vars.get(name, None);
+                    rt.vars.set(&AssignType::Add, name, None, Value::from(1))?;
                     value
                 },
                 LValueType::Dollar(e) => {
-                    let index = e.eval(vars, record, funcs)?.as_number() as isize;
-                    let value = record.get(index);
-                    record.set(vars, &AssignType::Add, index, Value::from(1))?;
+                    let index = e.eval(rt)?.as_number() as isize;
+                    let value = rt.record.get(index);
+                    rt.record
+                        .set(&mut rt.vars, &AssignType::Add, index, Value::from(1))?;
                     value
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    let value = vars.get(name, Some(&key_str));
-                    vars.set(&AssignType::Add, name, Some(&key_str), Value::from(1))?;
+                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    let value = rt.vars.get(name, Some(&key_str));
+                    rt.vars
+                        .set(&AssignType::Add, name, Some(&key_str), Value::from(1))?;
                     value
                 },
             },
             Expr::PostDecrement(lvalue) => match lvalue {
                 LValueType::Name(name) => {
-                    let value = vars.get(name, None);
-                    vars.set(&AssignType::Sub, name, None, Value::from(1))?;
+                    let value = rt.vars.get(name, None);
+                    rt.vars.set(&AssignType::Sub, name, None, Value::from(1))?;
                     value
                 },
                 LValueType::Dollar(e) => {
-                    let index = e.eval(vars, record, funcs)?.as_number() as isize;
-                    let value = record.get(index);
-                    record.set(vars, &AssignType::Sub, index, Value::from(1))?;
+                    let index = e.eval(rt)?.as_number() as isize;
+                    let value = rt.record.get(index);
+                    rt.record
+                        .set(&mut rt.vars, &AssignType::Sub, index, Value::from(1))?;
                     value
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(vars, record, funcs)?)?;
-                    let value = vars.get(name, Some(&key_str));
-                    vars.set(&AssignType::Sub, name, Some(&key_str), Value::from(1))?;
+                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    let value = rt.vars.get(name, Some(&key_str));
+                    rt.vars
+                        .set(&AssignType::Sub, name, Some(&key_str), Value::from(1))?;
                     value
                 },
             },
-            Expr::Regexp(reg) => Ok(Value::from(reg.is_match(&record.get(0)?.as_string()))),
+            Expr::Regexp(reg) => Ok(Value::from(reg.is_match(&rt.record.get(0)?.as_string()))),
             Expr::Match(neg, s, reg) => {
-                let reg_eval = match Regex::new(&reg.eval(vars, record, funcs)?.as_string()) {
+                let reg_eval = match Regex::new(&reg.eval(rt)?.as_string()) {
                     Ok(reg) => reg,
                     Err(e) => return Err(EvaluationError::InvalidRegex(e)),
                 };
-                let s_eval = s.eval(vars, record, funcs)?.as_string();
+                let s_eval = s.eval(rt)?.as_string();
                 let res = reg_eval.is_match(&s_eval);
                 Ok(Value::from(res == !*neg))
             },
-            Expr::FunctionCall(name, args) => funcs.call(name, args, vars, record),
-            Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(vars, record, funcs)?.as_number())),
-            Expr::UnaryPlus(up) => up.eval(vars, record, funcs),
-            Expr::Grouping(g) => g.eval(vars, record, funcs),
+            Expr::FunctionCall(name, args) => rt.funcs.call(name, args, rt),
+            Expr::UnaryMinus(um) => Ok(Value::from(-um.eval(rt)?.as_number())),
+            Expr::UnaryPlus(up) => up.eval(rt),
+            Expr::Grouping(g) => g.eval(rt),
             Expr::Number(n) => Ok(Value::from(*n)),
             Expr::String(s) => Ok(Value::String(s.to_owned())),
             _ => unimplemented!("{:?}", self),
@@ -203,7 +193,8 @@ mod tests {
     };
 
     fn eval_expr(expr: &Expr, rt: &mut Runtime) -> Result<Value, EvaluationError> {
-        expr.eval(&mut rt.vars, &mut rt.record, &rt.funcs)
+        let mut rt_mut = RuntimeMut::new(&mut rt.vars, &mut rt.record, &rt.funcs);
+        expr.eval(&mut rt_mut)
     }
 
     #[test]

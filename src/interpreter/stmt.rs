@@ -1,6 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{functions::Functions, record::Record, value::Value, variables::Variables, Eval},
+    interpreter::{value::Value, variables::Variables, Eval, RuntimeMut},
     parser::ast::{AssignType, Stmt},
 };
 
@@ -14,29 +14,29 @@ pub enum StmtResult {
 
 impl Eval for Stmt {
     type EvalResult = Option<StmtResult>;
-    fn eval<'a>(
-        &self,
-        vars: &'a mut Variables,
-        record: &mut Record,
-        funcs: &Functions,
-    ) -> Result<Option<StmtResult>, EvaluationError> {
+    fn eval(&self, rt: &mut RuntimeMut) -> Result<Option<StmtResult>, EvaluationError> {
         match self {
             Stmt::Print(exprs, redir) => {
                 for (i, expr) in exprs.0.iter().enumerate() {
-                    let val = expr.eval(vars, record, funcs)?;
+                    let val = expr.eval(rt)?;
                     print!(
                         "{}{}",
                         val.as_string(),
-                        if i + 1 == exprs.len() { "" } else { &vars.ofs }
+                        if i + 1 == exprs.len() {
+                            ""
+                        } else {
+                            &rt.vars.ofs
+                        }
                     );
                 }
-                print!("{}", vars.ors);
+                print!("{}", rt.vars.ors);
                 Ok(None)
             },
             Stmt::ForIn(var, array, body) => {
-                for key in vars.array_keys(array)? {
-                    vars.set(&AssignType::Normal, &var, None, Value::from(key.to_owned()))?;
-                    if let Some(res) = body.eval(vars, record, funcs)? {
+                for key in rt.vars.array_keys(array)? {
+                    rt.vars
+                        .set(&AssignType::Normal, &var, None, Value::from(key.to_owned()))?;
+                    if let Some(res) = body.eval(rt)? {
                         match res {
                             StmtResult::Break => break,
                             StmtResult::Continue => (),
@@ -48,16 +48,16 @@ impl Eval for Stmt {
             },
             Stmt::For(init, cond, step, body) => match (init, cond, step) {
                 (Some(init), Some(cond), Some(step)) => {
-                    init.eval(vars, record, funcs)?;
-                    while cond.eval(vars, record, funcs)?.as_bool() {
-                        if let Some(res) = body.eval(vars, record, funcs)? {
+                    init.eval(rt)?;
+                    while cond.eval(rt)?.as_bool() {
+                        if let Some(res) = body.eval(rt)? {
                             match res {
                                 StmtResult::Break => break,
                                 StmtResult::Continue => (),
                                 _ => unimplemented!("{:?}", res),
                             }
                         }
-                        step.eval(vars, record, funcs)?;
+                        step.eval(rt)?;
                     }
                     Ok(None)
                 },
@@ -65,22 +65,22 @@ impl Eval for Stmt {
             },
             Stmt::DoWhile(cond, stmt) => {
                 loop {
-                    if let Some(res) = stmt.eval(vars, record, funcs)? {
+                    if let Some(res) = stmt.eval(rt)? {
                         match res {
                             StmtResult::Break => break,
                             StmtResult::Continue => (),
                             _ => unimplemented!("{:?}", res),
                         }
                     }
-                    if !cond.eval(vars, record, funcs)?.as_bool() {
+                    if !cond.eval(rt)?.as_bool() {
                         break;
                     }
                 }
                 Ok(None)
             },
             Stmt::While(cond, stmt) => {
-                while cond.eval(vars, record, funcs)?.as_bool() {
-                    if let Some(res) = stmt.eval(vars, record, funcs)? {
+                while cond.eval(rt)?.as_bool() {
+                    if let Some(res) = stmt.eval(rt)? {
                         match res {
                             StmtResult::Break => break,
                             StmtResult::Continue => continue,
@@ -91,17 +91,17 @@ impl Eval for Stmt {
                 Ok(None)
             },
             Stmt::IfElse(cond, ok, ko) => {
-                if cond.eval(vars, record, funcs)?.as_bool() {
-                    ok.eval(vars, record, funcs)
+                if cond.eval(rt)?.as_bool() {
+                    ok.eval(rt)
                 } else if let Some(ko) = ko {
-                    ko.eval(vars, record, funcs)
+                    ko.eval(rt)
                 } else {
                     Ok(None)
                 }
             },
             Stmt::Block(stmts) => {
                 for stmt in &stmts.0 {
-                    if let Some(res) = stmt.eval(vars, record, funcs)? {
+                    if let Some(res) = stmt.eval(rt)? {
                         match res {
                             StmtResult::Break => return Ok(Some(StmtResult::Break)),
                             StmtResult::Continue => return Ok(Some(StmtResult::Continue)),
@@ -111,19 +111,19 @@ impl Eval for Stmt {
                 }
                 Ok(None)
             },
-            Stmt::Expr(e) => e.eval(vars, record, funcs).map(|_| None),
+            Stmt::Expr(e) => e.eval(rt).map(|_| None),
             Stmt::Break => Ok(Some(StmtResult::Break)),
             Stmt::Continue => Ok(Some(StmtResult::Continue)),
             Stmt::Return(expr) => match expr {
                 Some(expr) => {
-                    let ret = expr.eval(vars, record, funcs)?;
+                    let ret = expr.eval(rt)?;
                     Ok(Some(StmtResult::Return(ret)))
                 },
                 None => Ok(Some(StmtResult::Return(Value::Uninitialised))),
             },
             Stmt::Delete(array, index) => {
-                let key_str = Variables::array_key(index.eval(vars, record, funcs)?)?;
-                vars.delete(array, &key_str)?;
+                let key_str = Variables::array_key(index.eval(rt)?)?;
+                rt.vars.delete(array, &key_str)?;
                 Ok(None)
             },
             _ => unimplemented!("{:?}", self),
@@ -140,7 +140,8 @@ mod tests {
     };
 
     fn eval_stmt(stmt: &Stmt, rt: &mut Runtime) -> Result<Option<StmtResult>, EvaluationError> {
-        stmt.eval(&mut rt.vars, &mut rt.record, &rt.funcs)
+        let mut rt_mut = RuntimeMut::new(&mut rt.vars, &mut rt.record, &rt.funcs);
+        stmt.eval(&mut rt_mut)
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{record::Record, stmt::StmtResult, value::Value, variables::Variables, Eval},
-    parser::ast::{ExprList, Item},
+    interpreter::{stmt::StmtResult, value::Value, Eval, RuntimeMut},
+    parser::ast::{Expr, ExprList, Item, LValueType},
 };
 use std::collections::{hash_map::Entry, HashMap};
 
@@ -37,8 +37,7 @@ impl Functions {
         &self,
         name: &str,
         args: &ExprList,
-        vars: &mut Variables,
-        record: &mut Record,
+        rt: &mut RuntimeMut,
     ) -> Result<Value, EvaluationError> {
         match self.funcs.get(name) {
             Some(Item::FunctionDef(_, params, stmts)) => {
@@ -50,11 +49,33 @@ impl Functions {
                     ));
                 }
                 // setup local variables
-                vars.push_local_stack(params.as_slice(), args, record, self)?;
+                let mut locals = HashMap::new();
+                let mut references = HashMap::new();
+                let mut params_iter = params.iter();
+
+                // The iterator for args needs to be called first since it may be shorter than
+                // params. Zip will short-circuit and not call next on params_iter if args is
+                // smaller. This allows to fill the locals map with any remaining params.
+                for (arg, param) in args.0.iter().zip(params_iter.by_ref()) {
+                    // Arrays are passed by reference and so the param will refer to the
+                    // globally defined array instead of creating a new one within the
+                    // function's scope.
+                    if let Expr::LValue(LValueType::Name(name)) = arg {
+                        if let Some(Value::Array(_)) = rt.vars.globals.get(name) {
+                            references.insert(param.to_owned(), name.to_owned());
+                            continue;
+                        }
+                    }
+                    locals.insert(param.to_owned(), arg.eval(rt)?);
+                }
+                for param in params_iter {
+                    locals.insert(param.to_owned(), Value::Uninitialised);
+                }
+                rt.vars.push_local_stack(locals, references);
                 // execute the function
                 let mut ret = Value::Uninitialised;
                 for stmt in &stmts.0 {
-                    if let Some(res) = stmt.eval(vars, record, self)? {
+                    if let Some(res) = stmt.eval(rt)? {
                         match res {
                             StmtResult::Return(v) => {
                                 ret = v;
@@ -65,7 +86,7 @@ impl Functions {
                     }
                 }
                 // pop the call stack
-                vars.pop_local_stack();
+                rt.vars.pop_local_stack();
                 Ok(ret)
             },
             _ => Err(EvaluationError::UnknownFunction(name.to_owned())),
