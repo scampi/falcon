@@ -3,6 +3,7 @@ use crate::{
     interpreter::{value::Value, variables::Variables, Eval, RuntimeMut},
     parser::ast::{AssignType, Stmt},
 };
+use std::io::Write;
 
 #[derive(Debug)]
 pub enum StmtResult {
@@ -14,12 +15,19 @@ pub enum StmtResult {
 
 impl Eval for Stmt {
     type EvalResult = Option<StmtResult>;
-    fn eval(&self, rt: &mut RuntimeMut) -> Result<Option<StmtResult>, EvaluationError> {
+    fn eval<Output>(
+        &self,
+        rt: &mut RuntimeMut<Output>,
+    ) -> Result<Option<StmtResult>, EvaluationError>
+    where
+        Output: Write,
+    {
         match self {
             Stmt::Print(exprs, redir) => {
                 for (i, expr) in exprs.0.iter().enumerate() {
                     let val = expr.eval(rt)?;
-                    print!(
+                    write!(
+                        rt.output,
                         "{}{}",
                         val.as_string(),
                         if i + 1 == exprs.len() {
@@ -27,9 +35,9 @@ impl Eval for Stmt {
                         } else {
                             &rt.vars.ofs
                         }
-                    );
+                    )?;
                 }
-                print!("{}", rt.vars.ors);
+                write!(rt.output, "{}", rt.vars.ors)?;
                 Ok(None)
             },
             Stmt::ForIn(var, array, body) => {
@@ -138,15 +146,20 @@ mod tests {
         interpreter::{value::Value, Runtime},
         parser::{ast::Program, stmt::get_stmt},
     };
+    use std::io::Cursor;
 
-    fn eval_stmt(stmt: &Stmt, rt: &mut Runtime) -> Result<Option<StmtResult>, EvaluationError> {
-        let mut rt_mut = RuntimeMut::new(&mut rt.vars, &mut rt.record, &rt.funcs);
+    fn eval_stmt(
+        stmt: &Stmt,
+        rt: &mut Runtime<Cursor<Vec<u8>>>,
+    ) -> Result<Option<StmtResult>, EvaluationError> {
+        let mut rt_mut = RuntimeMut::new(rt.output, &mut rt.vars, &mut rt.record, &rt.funcs);
         stmt.eval(&mut rt_mut)
     }
 
     #[test]
     fn if_else() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
         let stmt = get_stmt(r#"if ($0 == 1) { a = "OK" } else { a = "KO" }"#);
         rt.set_next_record("1".to_owned());
         eval_stmt(&stmt, &mut rt).unwrap();
@@ -178,7 +191,8 @@ mod tests {
 
     #[test]
     fn block() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
         let stmt = get_stmt("{ a = 1; b = 2; c = a + b }");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
@@ -191,7 +205,8 @@ mod tests {
 
     #[test]
     fn r#while() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
         let stmt = get_stmt("while (a < 5) a += 2");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
@@ -213,7 +228,8 @@ mod tests {
 
     #[test]
     fn r#for() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
         let stmt = get_stmt("for (i = 0; i < 5; i++) a = a i");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
@@ -226,7 +242,8 @@ mod tests {
 
     #[test]
     fn r#break() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
         let stmt = get_stmt("while (a < 10) if (a < 5) a += 2; else break;");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
@@ -258,7 +275,8 @@ mod tests {
 
     #[test]
     fn r#continue() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
         let stmt = get_stmt("while (a1 < 10) { a1++; if (a1 < 5) continue; a2++; }");
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
@@ -302,7 +320,8 @@ mod tests {
 
     #[test]
     fn for_in() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
         let stmt = get_stmt(
             r#"{
             a[0] = 5;
@@ -343,19 +362,20 @@ mod tests {
 
     #[test]
     fn delete() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
         let stmt = get_stmt(
             r#"{
-            a[0] = 5;
-            a[1] = 10;
-            a[2] = 15;
-            a[3] = 20;
-            for (i in a) {
-                if (a[i] < 12) {
-                    delete a[i];
+                a[0] = 5;
+                a[1] = 10;
+                a[2] = 15;
+                a[3] = 20;
+                for (i in a) {
+                    if (a[i] < 12) {
+                        delete a[i];
+                    }
                 }
-            }
-        }"#,
+            }"#,
         );
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
@@ -379,6 +399,26 @@ mod tests {
         assert_eq!(
             rt.vars.get("a", Some("3")).unwrap(),
             Value::from(20.0),
+            "{:?}",
+            stmt
+        );
+    }
+
+    #[test]
+    fn print() {
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
+        let stmt = get_stmt(
+            r#"{
+                a = 5;
+                b = 10;
+                print "a =", a, ", b =", b;
+            }"#,
+        );
+        eval_stmt(&stmt, &mut rt).unwrap();
+        assert_eq!(
+            String::from_utf8(out.into_inner()).unwrap(),
+            "a = 5 , b = 10\n",
             "{:?}",
             stmt
         );

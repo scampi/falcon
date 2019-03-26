@@ -4,10 +4,14 @@ use crate::{
     parser::ast::{AssignType, Expr, ExprList, LValueType},
 };
 use regex::Regex;
+use std::io::Write;
 
 impl Eval for ExprList {
     type EvalResult = Vec<Value>;
-    fn eval(&self, rt: &mut RuntimeMut) -> Result<Vec<Value>, EvaluationError> {
+    fn eval<Output>(&self, rt: &mut RuntimeMut<Output>) -> Result<Self::EvalResult, EvaluationError>
+    where
+        Output: Write,
+    {
         let mut values = Vec::with_capacity(self.len());
         for expr in &self.0 {
             values.push(expr.eval(rt)?);
@@ -18,7 +22,10 @@ impl Eval for ExprList {
 
 impl Eval for Expr {
     type EvalResult = Value;
-    fn eval(&self, rt: &mut RuntimeMut) -> Result<Value, EvaluationError> {
+    fn eval<Output>(&self, rt: &mut RuntimeMut<Output>) -> Result<Value, EvaluationError>
+    where
+        Output: Write,
+    {
         match self {
             Expr::Mod(l, r) => Ok(Value::from(
                 l.eval(rt)?.as_number() % r.eval(rt)?.as_number(),
@@ -191,15 +198,17 @@ mod tests {
         interpreter::Runtime,
         parser::{ast::Program, expr::get_expr},
     };
+    use std::io::Cursor;
 
-    fn eval_expr(expr: &Expr, rt: &mut Runtime) -> Result<Value, EvaluationError> {
-        let mut rt_mut = RuntimeMut::new(&mut rt.vars, &mut rt.record, &rt.funcs);
+    fn eval_expr(expr: &Expr, rt: &mut Runtime<Cursor<Vec<u8>>>) -> Result<Value, EvaluationError> {
+        let mut rt_mut = RuntimeMut::new(rt.output, &mut rt.vars, &mut rt.record, &rt.funcs);
         expr.eval(&mut rt_mut)
     }
 
     #[test]
     fn arithmetic() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         let expr = get_expr("1 + 2");
         let res = eval_expr(&expr, &mut rt);
@@ -258,7 +267,8 @@ mod tests {
 
     #[test]
     fn comparison() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         let expr = get_expr("2 < 3");
         let res = eval_expr(&expr, &mut rt);
@@ -295,7 +305,8 @@ mod tests {
 
     #[test]
     fn concat() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         let expr = get_expr(r#"1 " aaa " 2"#);
         let res = eval_expr(&expr, &mut rt);
@@ -321,7 +332,8 @@ mod tests {
 
     #[test]
     fn logical_operation() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         let expr = get_expr("1 && 2");
         let res = eval_expr(&expr, &mut rt);
@@ -358,7 +370,8 @@ mod tests {
 
     #[test]
     fn conditional() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         let expr = get_expr(r#"1 == 1 ? "OK" : "KO""#);
         let res = eval_expr(&expr, &mut rt);
@@ -379,7 +392,8 @@ mod tests {
 
     #[test]
     fn field_lvalue() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         rt.set_next_record("john connor".to_owned());
 
@@ -417,7 +431,8 @@ mod tests {
 
     #[test]
     fn var_lvalue() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         rt.set_next_record("john connor".to_owned());
 
@@ -434,7 +449,8 @@ mod tests {
 
     #[test]
     fn array_lvalue() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         let expr = get_expr("a[0]");
         let res = eval_expr(&expr, &mut rt);
@@ -458,7 +474,8 @@ mod tests {
 
     #[test]
     fn assignment_name_lvalue() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         let expr = get_expr("a = 42");
         let res = eval_expr(&expr, &mut rt);
@@ -522,7 +539,8 @@ mod tests {
 
     #[test]
     fn assignment_dollar_lvalue() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         rt.set_next_record("john connor".to_owned());
 
@@ -608,7 +626,8 @@ mod tests {
 
     #[test]
     fn assignment_brackets_lvalue() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         let expr = get_expr("a[0] = 42");
         let res = eval_expr(&expr, &mut rt);
@@ -629,7 +648,8 @@ mod tests {
 
     #[test]
     fn record_count() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         rt.set_next_record("john connor".to_owned());
         assert_eq!(rt.vars.nr, 1);
@@ -641,7 +661,8 @@ mod tests {
 
     #[test]
     fn preincrement() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         // preincrement a variable
         let expr = get_expr("a = 15");
@@ -665,7 +686,8 @@ mod tests {
 
     #[test]
     fn postincrement() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         // postincrement a variable
         let expr = get_expr("a = 15");
@@ -689,7 +711,8 @@ mod tests {
 
     #[test]
     fn predecrement() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         // preincrement a variable
         let expr = get_expr("a = 15");
@@ -713,7 +736,8 @@ mod tests {
 
     #[test]
     fn postdecrement() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         // postincrement a variable
         let expr = get_expr("a = 15");
@@ -737,7 +761,8 @@ mod tests {
 
     #[test]
     fn regexp() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         rt.set_next_record("john connor".to_owned());
 
@@ -752,7 +777,8 @@ mod tests {
 
     #[test]
     fn r#match() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         rt.set_next_record("john connor".to_owned());
 
@@ -777,7 +803,8 @@ mod tests {
 
     #[test]
     fn scalar_array_misuse() {
-        let mut rt = Runtime::new(Program::empty()).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
 
         let expr = get_expr("FS[0]=42");
         let err = eval_expr(&expr, &mut rt).unwrap_err();

@@ -3,7 +3,10 @@ use crate::{
     interpreter::{stmt::StmtResult, value::Value, Eval, RuntimeMut},
     parser::ast::{Expr, ExprList, Item, LValueType},
 };
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    io::Write,
+};
 
 #[derive(Debug)]
 pub struct Functions {
@@ -33,12 +36,15 @@ impl Functions {
         Ok(())
     }
 
-    pub fn call(
+    pub fn call<Output>(
         &self,
         name: &str,
         args: &ExprList,
-        rt: &mut RuntimeMut,
-    ) -> Result<Value, EvaluationError> {
+        rt: &mut RuntimeMut<Output>,
+    ) -> Result<Value, EvaluationError>
+    where
+        Output: Write,
+    {
         match self.funcs.get(name) {
             Some(Item::FunctionDef(_, params, stmts)) => {
                 if args.len() > params.len() {

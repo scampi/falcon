@@ -3,8 +3,8 @@ use crate::{
     interpreter::{value::Value, variables::Variables},
     parser::ast::AssignType,
 };
-use regex::Regex;
 use lazy_static::lazy_static;
+use regex::Regex;
 
 #[derive(Debug)]
 pub struct Record {
@@ -26,12 +26,20 @@ impl Record {
             lazy_static! {
                 static ref FS_REGEX: Regex = Regex::new(r"[ \t]+").unwrap();
             }
-            FS_REGEX.split(&self.record).skip_while(|s| s.is_empty()).map(|s| s.to_owned()).collect()
+            FS_REGEX
+                .split(&self.record)
+                .skip_while(|s| s.is_empty())
+                .map(|s| s.to_owned())
+                .collect()
         } else if vars.fs.len() == 1 {
             self.record.split(&vars.fs).map(|s| s.to_owned()).collect()
         } else {
             let fs_pattern = Regex::new(&vars.fs).unwrap();
-            fs_pattern.split(&self.record).skip_while(|s| s.is_empty()).map(|s| s.to_owned()).collect()
+            fs_pattern
+                .split(&self.record)
+                .skip_while(|s| s.is_empty())
+                .map(|s| s.to_owned())
+                .collect()
         };
         vars.nf = self.fields.len();
     }

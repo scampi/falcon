@@ -2,6 +2,7 @@ use crate::{
     errors::EvaluationError,
     parser::ast::{Item, Pattern, Program},
 };
+use std::io::Write;
 
 mod expr;
 mod functions;
@@ -11,7 +12,11 @@ mod value;
 mod variables;
 
 #[derive(Debug)]
-pub struct Runtime {
+pub struct Runtime<'a, Output>
+where
+    Output: Write,
+{
+    output: &'a mut Output,
     vars: variables::Variables,
     record: record::Record,
     funcs: functions::Functions,
@@ -20,19 +25,28 @@ pub struct Runtime {
     patterns: Vec<EvalItem>,
 }
 
-pub struct RuntimeMut<'a> {
+pub struct RuntimeMut<'a, Output>
+where
+    Output: Write,
+{
+    output: &'a mut Output,
     vars: &'a mut variables::Variables,
     record: &'a mut record::Record,
     funcs: &'a functions::Functions,
 }
 
-impl<'a> RuntimeMut<'a> {
+impl<'a, Output> RuntimeMut<'a, Output>
+where
+    Output: Write,
+{
     fn new(
+        output: &'a mut Output,
         vars: &'a mut variables::Variables,
         record: &'a mut record::Record,
         funcs: &'a functions::Functions,
-    ) -> RuntimeMut<'a> {
+    ) -> RuntimeMut<'a, Output> {
         RuntimeMut {
+            output,
             vars,
             record,
             funcs,
@@ -55,9 +69,16 @@ impl EvalItem {
     }
 }
 
-impl Runtime {
-    pub fn new(program: Program) -> Result<Runtime, EvaluationError> {
+impl<'a, Output> Runtime<'a, Output>
+where
+    Output: Write,
+{
+    pub fn new(
+        program: Program,
+        output: &'a mut Output,
+    ) -> Result<Runtime<'a, Output>, EvaluationError> {
         let mut rt = Runtime {
+            output,
             patterns: Vec::with_capacity(program.items.len()),
             begin_patterns: Vec::with_capacity(program.items.len()),
             end_patterns: Vec::with_capacity(program.items.len()),
@@ -84,7 +105,12 @@ impl Runtime {
     }
 
     pub fn execute_begin_patterns(&mut self) -> Result<(), EvaluationError> {
-        let mut rt_mut = RuntimeMut::new(&mut self.vars, &mut self.record, &self.funcs);
+        let mut rt_mut = RuntimeMut::new(
+            &mut self.output,
+            &mut self.vars,
+            &mut self.record,
+            &self.funcs,
+        );
         for pattern in &self.begin_patterns {
             if let Item::PatternAction(Some(Pattern::Begin), stmts) = pattern {
                 for stmt in &stmts.0 {
@@ -98,7 +124,12 @@ impl Runtime {
     }
 
     pub fn execute_end_patterns(&mut self) -> Result<(), EvaluationError> {
-        let mut rt_mut = RuntimeMut::new(&mut self.vars, &mut self.record, &self.funcs);
+        let mut rt_mut = RuntimeMut::new(
+            &mut self.output,
+            &mut self.vars,
+            &mut self.record,
+            &self.funcs,
+        );
         for pattern in &self.end_patterns {
             if let Item::PatternAction(Some(Pattern::End), stmts) = pattern {
                 for stmt in &stmts.0 {
@@ -112,7 +143,12 @@ impl Runtime {
     }
 
     pub fn execute_main_patterns(&mut self) -> Result<(), EvaluationError> {
-        let mut rt_mut = RuntimeMut::new(&mut self.vars, &mut self.record, &self.funcs);
+        let mut rt_mut = RuntimeMut::new(
+            &mut self.output,
+            &mut self.vars,
+            &mut self.record,
+            &self.funcs,
+        );
         for eval_item in self.patterns.iter_mut() {
             if let Item::PatternAction(pattern, stmts) = &eval_item.item {
                 match pattern {
@@ -147,7 +183,12 @@ impl Runtime {
 
 trait Eval {
     type EvalResult;
-    fn eval(&self, rt: &mut RuntimeMut) -> Result<Self::EvalResult, EvaluationError>;
+    fn eval<Output>(
+        &self,
+        rt: &mut RuntimeMut<Output>,
+    ) -> Result<Self::EvalResult, EvaluationError>
+    where
+        Output: Write;
 }
 
 #[cfg(test)]
@@ -157,6 +198,7 @@ mod tests {
         interpreter::{value::Value, Runtime},
         parser::program::get_program,
     };
+    use std::io::Cursor;
 
     #[test]
     fn invalid_function_call() {
@@ -166,27 +208,31 @@ mod tests {
                { a = 42; adder(2); }"#,
         );
 
-        match Runtime::new(prog).unwrap_err() {
+        let mut out = Cursor::new(Vec::new());
+        match Runtime::new(prog, &mut out).unwrap_err() {
             EvaluationError::DuplicateFunction(ref name) if name == "adder" => (),
             err @ _ => panic!("Unexpected error: {}", err),
         };
 
         let prog = get_program("function adder(var) { return 1 } { a = 42; adder(2, 3); }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         match rt.execute_main_patterns().unwrap_err() {
             EvaluationError::TooManyArguments(ref name, 2, 1) if name == "adder" => (),
             err @ _ => panic!("Unexpected error: {}", err),
         };
 
         let prog = get_program("function f(a) { a = 1 } { arr[0] = 42; f(arr) }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         match rt.execute_main_patterns().unwrap_err() {
             EvaluationError::UseArrayInScalarContext => (),
             err @ _ => panic!("Unexpected error: {}", err),
         };
 
         let prog = get_program("function f(a) { a[0] = 1 } { f(42) }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         match rt.execute_main_patterns().unwrap_err() {
             EvaluationError::UseScalarAsArray => (),
             err @ _ => panic!("Unexpected error: {}", err),
@@ -197,14 +243,16 @@ mod tests {
     fn custom_functions_scalar() {
         // update a global variable
         let prog = get_program("function adder(var) { a += var } { a = 42; adder(2); }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(44));
 
         // initialize a global variable and mutate a local variable with the same name
         // as a global variable
         let prog = get_program("function adder(a) { a += 10; b = a; } { a = 1; adder(5); }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(1));
         assert_eq!(rt.vars.get("b", None).unwrap(), Value::from(15));
@@ -215,7 +263,8 @@ mod tests {
                function f2(a) { a += 20; return a; }
                { a = f1(5); b = f2(5); }"#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("a", None).unwrap(), Value::Uninitialised);
         assert_eq!(rt.vars.get("b", None).unwrap(), Value::from(25));
@@ -226,13 +275,15 @@ mod tests {
                function f2(a) { a += 20; return f1(1); }
                { b = f2(5); }"#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("b", None).unwrap(), Value::from(11));
 
         // declare the variable "b" scoped to the function
         let prog = get_program("function adder(a, b) { a += 10; b = a; } { a = 1; adder(5); }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(1));
         assert_eq!(rt.vars.get("b", None).unwrap(), Value::Uninitialised);
@@ -243,7 +294,8 @@ mod tests {
                function f2(a) { a += f1(a); return a; }
                { a = f2(5); }"#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(20));
 
@@ -256,7 +308,8 @@ mod tests {
                }
                { a = f(5) }"#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("a", None).unwrap(), Value::from(10));
     }
@@ -265,7 +318,8 @@ mod tests {
     fn custom_functions_arrays() {
         // update global array
         let prog = get_program("function adder(var) { a[0] += var } { a[0] = 42; adder(2); }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::from(44));
 
@@ -283,7 +337,8 @@ mod tests {
             { result = join(3, 5); }
             "#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("result", None).unwrap(), Value::from(8));
 
@@ -303,7 +358,8 @@ mod tests {
             }
             "#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(
             rt.vars.get("result", None).unwrap(),
@@ -330,7 +386,8 @@ mod tests {
             }
             "#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(rt.vars.get("my_array", Some("0")).unwrap(), Value::from(6));
 
@@ -347,7 +404,8 @@ mod tests {
             }
             "#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(
             rt.vars.get("my_array", Some("0")).unwrap(),
@@ -359,7 +417,8 @@ mod tests {
     #[test]
     fn assign_array() {
         let prog = get_program("{ a[0] = 42; b = a; }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         match rt.execute_main_patterns().unwrap_err() {
             EvaluationError::UseArrayInScalarContext => (),
             err @ _ => panic!("Unexpected error: {}", err),
@@ -369,7 +428,8 @@ mod tests {
     #[test]
     fn use_scalar_with_for_in() {
         let prog = get_program("{ a = 42; for (i in a) continue; }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         match rt.execute_main_patterns().unwrap_err() {
             EvaluationError::UseScalarAsArray => (),
             err @ _ => panic!("Unexpected error: {}", err),
@@ -386,7 +446,8 @@ mod tests {
             END { fullname = c "connor" }
             "#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         rt.execute_begin_patterns().unwrap();
         rt.execute_main_patterns().unwrap();
@@ -413,7 +474,8 @@ mod tests {
             END { end_fnr = FNR }
             "#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         rt.execute_begin_patterns().unwrap();
         for line in input.lines() {
@@ -434,7 +496,8 @@ mod tests {
             END { end_nf = NF }
             "#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         rt.execute_begin_patterns().unwrap();
         for line in input.lines() {
@@ -458,7 +521,8 @@ mod tests {
             /pig/ { name[NR] = "peppa" }
             "#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         for line in input.lines() {
             rt.set_next_record(line.to_owned());
@@ -483,7 +547,8 @@ mod tests {
         // 2 consecutive ranges
         let input = "0\n1\n2\n3\n4\n1\n2\n3\n4";
         let prog = get_program(r#"/1/,/3/ { c = c " " NR ":" $0 }"#);
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         for line in input.lines() {
             rt.set_next_record(line.to_owned());
@@ -510,7 +575,8 @@ a b"#;
                 { $2 = "john connor"; c[NR] = $0 }
             "#,
         );
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         for line in input.lines() {
             rt.set_next_record(line.to_owned());
@@ -533,7 +599,8 @@ a b"#;
     fn multiple_whitespaces() {
         let input = "   \taaa bbb       ccc   \t  ";
         let prog = get_program("{ a = $1; b = $2; c = $3 }");
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         rt.set_next_record(input.to_owned());
         rt.execute_main_patterns().unwrap();
@@ -562,7 +629,8 @@ a b"#;
 
         let input = "a.b";
         let prog = get_program(&prog_str("."));
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_begin_patterns().unwrap();
         rt.set_next_record(input.to_owned());
         rt.execute_main_patterns().unwrap();
@@ -579,7 +647,8 @@ a b"#;
 
         let input = "aahereayouaaaawereaaaaaa";
         let prog = get_program(&prog_str("a+"));
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_begin_patterns().unwrap();
         rt.set_next_record(input.to_owned());
         rt.execute_main_patterns().unwrap();
@@ -600,7 +669,8 @@ a b"#;
 
         let input = "abcthisadcarcisaechere";
         let prog = get_program(&prog_str("a.c"));
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_begin_patterns().unwrap();
         rt.set_next_record(input.to_owned());
         rt.execute_main_patterns().unwrap();
@@ -625,7 +695,8 @@ a b"#;
 
         let input = "abcthisadcarcisaechere";
         let prog = get_program(&prog_str("(a.c)+"));
-        let mut rt = Runtime::new(prog).unwrap();
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_begin_patterns().unwrap();
         rt.set_next_record(input.to_owned());
         rt.execute_main_patterns().unwrap();

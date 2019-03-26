@@ -39,6 +39,12 @@ pub enum ParseError {
     CombineError(String),
 }
 
+impl From<std::io::Error> for EvaluationError {
+    fn from(e: std::io::Error) -> EvaluationError {
+        EvaluationError::IoError(String::from("IO error"), e)
+    }
+}
+
 impl From<combine::stream::easy::Errors<char, &str, combine::stream::state::SourcePosition>>
     for ParseError
 {

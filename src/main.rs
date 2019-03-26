@@ -9,7 +9,7 @@ use combine::{parser::Parser, stream::state::State};
 use exitcode;
 use std::{
     fs::{self, File},
-    io::{BufRead, BufReader},
+    io::{self, BufRead, BufReader},
     path::PathBuf,
     process,
 };
@@ -86,7 +86,10 @@ fn get_program(input: &str) -> Program {
 }
 
 fn run_program(program: Program, inputs: Vec<PathBuf>) -> Result<(), EvaluationError> {
-    let mut rt = Runtime::new(program)?;
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+
+    let mut rt = Runtime::new(program, &mut handle)?;
 
     rt.execute_begin_patterns()?;
     for input in inputs {
