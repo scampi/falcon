@@ -8,7 +8,7 @@ use std::io::Write;
 
 impl Eval for ExprList {
     type EvalResult = Vec<Value>;
-    fn eval<Output>(&self, rt: &mut RuntimeMut<Output>) -> Result<Self::EvalResult, EvaluationError>
+    fn eval<Output>(&self, rt: &mut RuntimeMut<'_, Output>) -> Result<Self::EvalResult, EvaluationError>
     where
         Output: Write,
     {
@@ -22,7 +22,7 @@ impl Eval for ExprList {
 
 impl Eval for Expr {
     type EvalResult = Value;
-    fn eval<Output>(&self, rt: &mut RuntimeMut<Output>) -> Result<Value, EvaluationError>
+    fn eval<Output>(&self, rt: &mut RuntimeMut<'_, Output>) -> Result<Value, EvaluationError>
     where
         Output: Write,
     {
@@ -200,7 +200,7 @@ mod tests {
     };
     use std::io::Cursor;
 
-    fn eval_expr(expr: &Expr, rt: &mut Runtime<Cursor<Vec<u8>>>) -> Result<Value, EvaluationError> {
+    fn eval_expr(expr: &Expr, rt: &mut Runtime<'_, Cursor<Vec<u8>>>) -> Result<Value, EvaluationError> {
         let mut rt_mut = RuntimeMut::new(rt.output, &mut rt.vars, &mut rt.record, &rt.funcs);
         expr.eval(&mut rt_mut)
     }

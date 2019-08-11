@@ -40,7 +40,7 @@ impl Functions {
         &self,
         name: &str,
         args: &ExprList,
-        rt: &mut RuntimeMut<Output>,
+        rt: &mut RuntimeMut<'_, Output>,
     ) -> Result<Value, EvaluationError>
     where
         Output: Write,

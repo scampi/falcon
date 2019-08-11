@@ -17,13 +17,13 @@ impl Eval for Stmt {
     type EvalResult = Option<StmtResult>;
     fn eval<Output>(
         &self,
-        rt: &mut RuntimeMut<Output>,
+        rt: &mut RuntimeMut<'_, Output>,
     ) -> Result<Option<StmtResult>, EvaluationError>
     where
         Output: Write,
     {
         match self {
-            Stmt::Print(exprs, redir) => {
+            Stmt::Print(exprs, _redir) => {
                 for (i, expr) in exprs.0.iter().enumerate() {
                     let val = expr.eval(rt)?;
                     write!(
@@ -150,7 +150,7 @@ mod tests {
 
     fn eval_stmt(
         stmt: &Stmt,
-        rt: &mut Runtime<Cursor<Vec<u8>>>,
+        rt: &mut Runtime<'_, Cursor<Vec<u8>>>,
     ) -> Result<Option<StmtResult>, EvaluationError> {
         let mut rt_mut = RuntimeMut::new(rt.output, &mut rt.vars, &mut rt.record, &rt.funcs);
         stmt.eval(&mut rt_mut)

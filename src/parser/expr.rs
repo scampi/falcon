@@ -88,13 +88,13 @@ parser! {
 }
 
 parser! {
-    fn parse_expr_list['a, I]()(I) -> ExprList
+    pub fn parse_print_expr_list['a, I]()(I) -> ExprList
     where [
         I: RangeStream<Item = char, Range = &'a str> + 'a,
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by(parse_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+        sep_by(parse_print_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
     }
 }
 
@@ -106,6 +106,17 @@ parser! {
     ]
     {
         sep_by1(parse_print_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+    }
+}
+
+parser! {
+    fn parse_expr_list['a, I]()(I) -> ExprList
+    where [
+        I: RangeStream<Item = char, Range = &'a str> + 'a,
+        I::Error: ParseError<I::Item, I::Range, I::Position>,
+    ]
+    {
+        sep_by(parse_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
     }
 }
 

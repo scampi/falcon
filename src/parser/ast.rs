@@ -17,7 +17,7 @@ impl Program {
 }
 
 impl fmt::Display for Program {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for item in &self.items {
             write!(f, "{};", item)?;
         }
@@ -32,7 +32,7 @@ pub enum Item {
 }
 
 impl fmt::Display for Item {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Item::PatternAction(None, action) => write!(f, "{}", action),
             Item::PatternAction(Some(pattern), action) => write!(f, "{} {}", pattern, action),
@@ -56,7 +56,7 @@ pub enum Pattern {
 }
 
 impl fmt::Display for Pattern {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Pattern::Begin => write!(f, "BEGIN"),
             Pattern::End => write!(f, "END"),
@@ -70,7 +70,7 @@ impl fmt::Display for Pattern {
 pub struct StmtList(pub Vec<Stmt>);
 
 impl fmt::Display for StmtList {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for stmt in &self.0 {
             write!(f, "{}, ", stmt)?;
         }
@@ -110,7 +110,7 @@ pub enum OutputRedirection {
 }
 
 impl fmt::Display for OutputRedirection {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OutputRedirection::Truncate(e) => write!(f, "> {}", e),
             OutputRedirection::Append(e) => write!(f, ">> {}", e),
@@ -120,7 +120,7 @@ impl fmt::Display for OutputRedirection {
 }
 
 impl fmt::Display for Stmt {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Stmt::Print(exprs, None) => write!(f, "print({})", exprs),
             Stmt::Printf(exprs, None) => write!(f, "printf({})", exprs),
@@ -185,7 +185,7 @@ impl PartialEq for RegexEq {
 }
 
 impl fmt::Display for RegexEq {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
@@ -205,7 +205,7 @@ impl RegexEq {
 pub struct ExprList(pub Vec<Expr>);
 
 impl fmt::Display for ExprList {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         for expr in &self.0 {
             write!(formatter, "{}, ", expr)?;
         }
@@ -288,7 +288,7 @@ impl From<&str> for CmpOperator {
 }
 
 impl fmt::Display for CmpOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CmpOperator::LessThan => write!(f, "<"),
             CmpOperator::LessThanOrEqual => write!(f, "<="),
@@ -308,7 +308,7 @@ pub enum LValueType {
 }
 
 impl fmt::Display for LValueType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LValueType::Name(name) => write!(f, "{}", name),
             LValueType::Dollar(e) => write!(f, "{}", e),
@@ -344,7 +344,7 @@ impl AssignType {
 }
 
 impl fmt::Display for AssignType {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AssignType::Normal => write!(formatter, "="),
             AssignType::Pow => write!(formatter, "^="),
@@ -358,7 +358,7 @@ impl fmt::Display for AssignType {
 }
 
 impl fmt::Display for Expr {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expr::Grouping(e) => write!(formatter, "❨ {} ❩", e),
             Expr::UnaryPlus(e) => write!(formatter, "+( {} )", e),

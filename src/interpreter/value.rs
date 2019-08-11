@@ -44,7 +44,7 @@ impl From<String> for Value {
 }
 
 impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Uninitialised => Ok(()),
             Value::Number(n) => write!(f, "{}", n),

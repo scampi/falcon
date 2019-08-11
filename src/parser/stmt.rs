@@ -260,13 +260,13 @@ parser! {
             .map(|(exprs, redir)| Stmt::Print(exprs, redir)),
             attempt(
                 skip_wrapping_spaces(string("printf"))
-                    .with(parse_print_expr_list1())
+                    .with(parse_print_expr_list())
                     .and(optional(parse_output_redirection())),
             )
             .map(|(exprs, redir)| Stmt::Printf(exprs, redir)),
             attempt(
                 skip_wrapping_spaces(string("print"))
-                    .with(parse_print_expr_list1())
+                    .with(parse_print_expr_list())
                     .and(optional(parse_output_redirection())),
             )
             .map(|(exprs, redir)| Stmt::Print(exprs, redir)),
@@ -641,6 +641,7 @@ mod tests {
             "print 42",
             Stmt::Print(ExprList(vec![Expr::Number(42f64)]), None),
         );
+        assert_stmt("print", Stmt::Print(ExprList(vec![]), None));
         assert_stmt(
             "print ( 42 )",
             Stmt::Print(ExprList(vec![Expr::Number(42f64)]), None),

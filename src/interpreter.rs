@@ -185,7 +185,7 @@ trait Eval {
     type EvalResult;
     fn eval<Output>(
         &self,
-        rt: &mut RuntimeMut<Output>,
+        rt: &mut RuntimeMut<'_, Output>,
     ) -> Result<Self::EvalResult, EvaluationError>
     where
         Output: Write;
