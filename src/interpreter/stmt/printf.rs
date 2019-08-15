@@ -91,21 +91,55 @@ impl Conversion {
         value: Value,
     ) -> Result<(), EvaluationError> {
         match self.specifier {
-            ConversionSpecifier::Float => {
-                let value = value.as_number();
-                let trunc = value.trunc();
-                write!(output, "{}", trunc)?;
-                if self.precision != 0 {
-                    let fract = (value.fract() * 10_f64.powi(self.precision as i32)).round();
-                    if fract == 0_f64 {
-                        write!(output, ".{}", "0".repeat(self.precision))?;
-                    } else {
-                        write!(output, ".{}", fract)?;
-                    }
-                }
-            },
+            ConversionSpecifier::Float => self.convert_float(output, value),
             _ => unimplemented!("{:?}", self.specifier),
+        }
+    }
+
+    fn convert_float<Output: Write>(
+        &self,
+        output: &mut Output,
+        value: Value,
+    ) -> Result<(), EvaluationError> {
+        let value = value.as_number();
+        let trunc = value.trunc().abs().to_string();
+
+        let padding = if self.width != 0 {
+            self.width.saturating_sub(
+                if value.is_sign_negative() || self.signed || self.space { 1 } else { 0 }
+                + trunc.len()
+                // 1 = '.'
+                + if self.precision != 0 { self.precision + 1 } else { 0 },
+            )
+        } else {
+            0
         };
+
+        if padding != 0 && !self.leading_zeros {
+            write!(output, "{}", " ".repeat(padding))?;
+        }
+        if value.is_sign_positive() {
+            if self.signed {
+                write!(output, "+")?;
+            } else if self.space {
+                write!(output, " ")?;
+            }
+        } else {
+            write!(output, "-")?;
+        }
+        if padding != 0 && self.leading_zeros {
+            write!(output, "{}", "0".repeat(padding))?;
+        }
+
+        write!(output, "{}", trunc)?;
+        if self.precision != 0 {
+            let fract = (value.fract().abs() * 10_f64.powi(self.precision as i32)).round();
+            if fract == 0_f64 {
+                write!(output, ".{}", "0".repeat(self.precision))?;
+            } else {
+                write!(output, ".{}", fract)?;
+            }
+        }
         Ok(())
     }
 }
@@ -182,6 +216,7 @@ where
 
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn conversions() {
@@ -201,5 +236,46 @@ mod tests {
 
         let conv = Conversion::new(&mut ".42%".chars()).unwrap();
         assert_eq!(conv.specifier, ConversionSpecifier::Percent);
+    }
+
+    #[test]
+    fn float_conversion() {
+        #[rustfmt::skip]
+        let data = [
+            (".2f",     Value::from(4.2),   "4.20"),
+            (".2f",     Value::from(-4.2),  "-4.20"),
+            (".0f",     Value::from(4.2),   "4"),
+            (".2f",     Value::from(42.2),  "42.20"),
+            (".2f",     Value::from(10),    "10.00"),
+            ("f",       Value::from(4.2),   "4.200000"),
+            ("+.2f",    Value::from(4.2),   "+4.20"),
+            ("+.2f",    Value::from(-4.2),  "-4.20"),
+            (" .2f",    Value::from(-4.2),  "-4.20"),
+            (" .2f",    Value::from(4.2),   " 4.20"),
+            ("0f",      Value::from(4.2),   "4.200000"),
+            ("010.2f",  Value::from(4.2),   "0000004.20"),
+            ("010.0f",  Value::from(4.2),   "0000000004"),
+            ("02.0f",   Value::from(4.2),   "04"),
+            (" 04.1f",  Value::from(4.2),   " 4.2"),
+            ("05.1f",   Value::from(4.2),   "004.2"),
+            (" 05.1f",  Value::from(4.2),   " 04.2"),
+            (" 05.1f",  Value::from(-4.2),  "-04.2"),
+            ("+05.1f",  Value::from(4.2),   "+04.2"),
+            ("+5.1f",   Value::from(4.2),   " +4.2"),
+            (" 5.1f",   Value::from(4.2),   "  4.2"),
+            ("5.1f",    Value::from(4.2),   "  4.2"),
+        ];
+        for (i, (fmt, arg, expected)) in data.iter().enumerate() {
+            let mut out = Cursor::new(Vec::new());
+            let conv = Conversion::new(&mut fmt.chars()).unwrap();
+            conv.convert(&mut out, arg.clone()).unwrap();
+            assert_eq!(
+                String::from_utf8(out.into_inner()).unwrap(),
+                *expected,
+                "failed on input[{}]: {:?}",
+                i,
+                conv
+            );
+        }
     }
 }
