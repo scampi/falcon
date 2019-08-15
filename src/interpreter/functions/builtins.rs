@@ -14,6 +14,8 @@ pub fn is_builtin(name: &str) -> bool {
         "cos" => true,
         "exp" => true,
         "log" => true,
+        "toupper" => true,
+        "tolower" => true,
         _ => false,
     }
 }
@@ -34,6 +36,8 @@ where
         "cos" => cos::execute(args, rt),
         "exp" => exp::execute(args, rt),
         "log" => log::execute(args, rt),
+        "toupper" => toupper::execute(args, rt),
+        "tolower" => tolower::execute(args, rt),
         _ => unreachable!(),
     }
 }
@@ -47,3 +51,5 @@ mod sin;
 // String functions
 mod index;
 mod substr;
+mod tolower;
+mod toupper;

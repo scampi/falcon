@@ -12,8 +12,8 @@ struct Conversion {
     space: bool,
     alternative_form: bool,
     leading_zeros: bool,
-    width: usize,
-    precision: usize,
+    width: Option<usize>,
+    precision: Option<usize>,
     specifier: ConversionSpecifier,
 }
 
@@ -47,7 +47,7 @@ impl Conversion {
                     err.push(iter.next().unwrap());
                 }
                 conv.width = if let Ok(width) = width.parse() {
-                    width
+                    Some(width)
                 } else {
                     return Err(err);
                 };
@@ -60,7 +60,7 @@ impl Conversion {
             while let Some(&p) = iter.peek() {
                 if !p.is_digit(10) {
                     conv.precision = if let Ok(precision) = precision.parse() {
-                        precision
+                        Some(precision)
                     } else {
                         return Err(err);
                     };
@@ -69,8 +69,6 @@ impl Conversion {
                 precision.push(p);
                 err.push(iter.next().unwrap());
             }
-        } else {
-            conv.precision = 6;
         }
         // specifier
         if let Some(c) = iter.next() {
@@ -92,6 +90,7 @@ impl Conversion {
     ) -> Result<(), EvaluationError> {
         match self.specifier {
             ConversionSpecifier::Float => self.convert_float(output, value),
+            ConversionSpecifier::String => self.convert_string(output, value),
             _ => unimplemented!("{:?}", self.specifier),
         }
     }
@@ -104,12 +103,13 @@ impl Conversion {
         let value = value.as_number();
         let trunc = value.trunc().abs().to_string();
 
-        let padding = if self.width != 0 {
-            self.width.saturating_sub(
+        let precision = self.precision.unwrap_or(6);
+        let padding = if let Some(width) = self.width {
+            width.saturating_sub(
                 if value.is_sign_negative() || self.signed || self.space { 1 } else { 0 }
                 + trunc.len()
                 // 1 = '.'
-                + if self.precision != 0 { self.precision + 1 } else { 0 },
+                + if precision != 0 { precision + 1 } else { 0 },
             )
         } else {
             0
@@ -132,14 +132,31 @@ impl Conversion {
         }
 
         write!(output, "{}", trunc)?;
-        if self.precision != 0 {
-            let fract = (value.fract().abs() * 10_f64.powi(self.precision as i32)).round();
+        if precision != 0 {
+            let fract = (value.fract().abs() * 10_f64.powi(precision as i32)).round();
             if fract == 0_f64 {
-                write!(output, ".{}", "0".repeat(self.precision))?;
+                write!(output, ".{}", "0".repeat(precision))?;
             } else {
                 write!(output, ".{}", fract)?;
             }
         }
+        Ok(())
+    }
+
+    fn convert_string<Output: Write>(
+        &self,
+        output: &mut Output,
+        value: Value,
+    ) -> Result<(), EvaluationError> {
+        let value = if let Some(precision) = self.precision {
+            value.as_string().get(0..precision).unwrap().to_string()
+        } else {
+            value.as_string()
+        };
+        if let Some(width) = self.width {
+            write!(output, "{}", " ".repeat(width.saturating_sub(value.len())))?;
+        }
+        write!(output, "{}", value)?;
         Ok(())
     }
 }
@@ -224,11 +241,11 @@ mod tests {
         assert_eq!(conv.specifier, ConversionSpecifier::SignedDecimal);
 
         let conv = Conversion::new(&mut ".5f".chars()).unwrap();
-        assert_eq!(conv.precision, 5);
+        assert_eq!(conv.precision, Some(5));
         assert_eq!(conv.specifier, ConversionSpecifier::Float);
 
         let conv = Conversion::new(&mut "42s".chars()).unwrap();
-        assert_eq!(conv.width, 42);
+        assert_eq!(conv.width, Some(42));
         assert_eq!(conv.specifier, ConversionSpecifier::String);
 
         let conv = Conversion::new(&mut "%".chars()).unwrap();
@@ -264,6 +281,32 @@ mod tests {
             ("+5.1f",   Value::from(4.2),   " +4.2"),
             (" 5.1f",   Value::from(4.2),   "  4.2"),
             ("5.1f",    Value::from(4.2),   "  4.2"),
+        ];
+        for (i, (fmt, arg, expected)) in data.iter().enumerate() {
+            let mut out = Cursor::new(Vec::new());
+            let conv = Conversion::new(&mut fmt.chars()).unwrap();
+            conv.convert(&mut out, arg.clone()).unwrap();
+            assert_eq!(
+                String::from_utf8(out.into_inner()).unwrap(),
+                *expected,
+                "failed on input[{}]: {:?}",
+                i,
+                conv
+            );
+        }
+    }
+
+    #[test]
+    fn string_conversion() {
+        #[rustfmt::skip]
+        let data = [
+            ("s",      Value::from("123456789"),  "123456789"),
+            ("5s",     Value::from("123456789"),  "123456789"),
+            ("10s",    Value::from("123456789"),  " 123456789"),
+            (".5s",    Value::from("123456789"),  "12345"),
+            ("10.5s",  Value::from("123456789"),  "     12345"),
+            (".0s",    Value::from("123456789"),  ""),
+            ("2.0s",   Value::from("123456789"),  "  "),
         ];
         for (i, (fmt, arg, expected)) in data.iter().enumerate() {
             let mut out = Cursor::new(Vec::new());

@@ -43,6 +43,12 @@ impl From<String> for Value {
     }
 }
 
+impl From<&str> for Value {
+    fn from(value: &str) -> Value {
+        Value::String(value.to_string())
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

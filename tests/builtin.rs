@@ -22,3 +22,12 @@ fn sin_cos() {
         "3.14159 0.000 0.000 3.14159 10.000\n",
     )
 }
+
+#[test]
+fn toupper_tolower() {
+    run_test(
+        Some("hello, WORLD!\n"),
+        r#"{ printf("%s|%s|%s\n", tolower($0), toupper($0), $0)}"#,
+        "hello, world!|HELLO, WORLD!|hello, WORLD!\n",
+    )
+}
