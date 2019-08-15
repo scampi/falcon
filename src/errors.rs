@@ -2,6 +2,10 @@ use failure_derive::Fail;
 
 #[derive(Debug, Fail)]
 pub enum EvaluationError {
+    #[fail(display = "{}: not enought arguments to satisfy format string", _0)]
+    MissingFormatStringArgs(String),
+    #[fail(display = "Function '{}' expected {} arguments but got {}", _0, _1, _2)]
+    InvalidNumberOfArguments(String, usize, usize),
     #[fail(display = "division by zero attempted")]
     DivisionByZero,
     #[fail(display = "attempt to access field {}", _0)]
@@ -27,6 +31,11 @@ pub enum EvaluationError {
 
 #[derive(Debug, Fail)]
 pub enum ParseError {
+    #[fail(
+        display = "Function {} is a built-in function, it cannot be redefined",
+        _0
+    )]
+    Builtin(String),
     #[fail(display = "Function {} has duplicate parameters", _0)]
     DuplicateParams(String),
     #[fail(display = "Invalid name: {}", _0)]

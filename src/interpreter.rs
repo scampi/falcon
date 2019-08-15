@@ -5,7 +5,7 @@ use crate::{
 use std::io::Write;
 
 mod expr;
-mod functions;
+pub mod functions;
 mod record;
 mod stmt;
 mod value;

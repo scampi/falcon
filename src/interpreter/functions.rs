@@ -1,12 +1,19 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{stmt::StmtResult, value::Value, Eval, RuntimeMut},
+    interpreter::{
+        functions::builtins::{call_builtin, is_builtin},
+        stmt::StmtResult,
+        value::Value,
+        Eval, RuntimeMut,
+    },
     parser::ast::{Expr, ExprList, Item, LValueType},
 };
 use std::{
     collections::{hash_map::Entry, HashMap},
     io::Write,
 };
+
+pub mod builtins;
 
 #[derive(Debug)]
 pub struct Functions {
@@ -45,6 +52,9 @@ impl Functions {
     where
         Output: Write,
     {
+        if is_builtin(name) {
+            return call_builtin(name, args, rt);
+        }
         match self.funcs.get(name) {
             Some(Item::FunctionDef(_, params, stmts)) => {
                 if args.len() > params.len() {

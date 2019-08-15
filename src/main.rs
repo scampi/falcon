@@ -5,6 +5,7 @@ use crate::{
     interpreter::Runtime,
     parser::{ast::Program, program::parse_program},
 };
+use atty;
 use combine::{parser::Parser, stream::state::State};
 use exitcode;
 use std::{
@@ -20,25 +21,24 @@ mod interpreter;
 mod parser;
 
 #[derive(StructOpt, Debug)]
-#[structopt(raw(setting = "AppSettings::AllowMissingPositional"))]
+#[structopt(raw(setting = "AppSettings::ColoredHelp"))]
+#[structopt(raw(setting = "AppSettings::ArgRequiredElseHelp"))]
 struct Cli {
-    #[structopt(name = "file", short, long, parse(from_os_str))]
-    /// The path to the AWK script file to execute
+    #[structopt(name = "file", short, long, value_name = "FILE", parse(from_os_str))]
+    /// The path to the AWK script file to execute.
     program_file: Option<PathBuf>,
-    /// The AWK script passed as argument
     #[structopt(name = "program")]
+    /// The AWK script passed as argument.
     program_str: Option<String>,
     #[structopt(parse(from_os_str))]
-    /// Input files to run the AWK script over
+    /// Input files to run the AWK script over.
     inputs: Vec<PathBuf>,
 }
 
 fn main() {
-    let cli = Cli::from_args();
+    let mut cli = Cli::from_args();
 
-    let program = if let Some(program) = cli.program_str {
-        get_program(&program)
-    } else if let Some(program_file) = cli.program_file {
+    let program = if let Some(program_file) = cli.program_file {
         if !program_file.is_file() {
             eprintln!(
                 "Program file at {} could not be read or did not exist",
@@ -57,10 +57,14 @@ fn main() {
                 process::exit(exitcode::NOINPUT);
             },
         };
+        if let Some(file) = cli.program_str {
+            // in case the "file" option is used, the first input is interpreted as a value
+            // of the program_str positional
+            cli.inputs.insert(0, PathBuf::from(file));
+        }
         get_program(&content)
     } else {
-        Cli::clap().print_help().unwrap();
-        process::exit(exitcode::USAGE);
+        get_program(&cli.program_str.unwrap())
     };
     if let Err(e) = run_program(program, cli.inputs) {
         eprintln!("{}", e);
@@ -92,18 +96,27 @@ fn run_program(program: Program, inputs: Vec<PathBuf>) -> Result<(), EvaluationE
     let mut rt = Runtime::new(program, &mut handle)?;
 
     rt.execute_begin_patterns()?;
-    for input in inputs {
-        let file = match File::open(&input) {
-            Ok(f) => f,
-            Err(e) => return Err(EvaluationError::IoError(input.display().to_string(), e)),
-        };
-        let filereader = BufReader::new(&file);
-        for line in filereader.lines() {
-            let line = match line {
-                Ok(l) => l,
+    if !inputs.is_empty() {
+        for input in inputs {
+            let file = match File::open(&input) {
+                Ok(f) => f,
                 Err(e) => return Err(EvaluationError::IoError(input.display().to_string(), e)),
             };
-            rt.set_next_record(line);
+            let filereader = BufReader::new(&file);
+            for line in filereader.lines() {
+                let line = match line {
+                    Ok(l) => l,
+                    Err(e) => return Err(EvaluationError::IoError(input.display().to_string(), e)),
+                };
+                rt.set_next_record(line);
+                rt.execute_main_patterns()?;
+            }
+        }
+    } else if atty::isnt(atty::Stream::Stdin) {
+        let stdin = io::stdin();
+        let handle = stdin.lock();
+        for line in handle.lines() {
+            rt.set_next_record(line?);
             rt.execute_main_patterns()?;
         }
     }

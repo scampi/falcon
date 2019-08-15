@@ -1,8 +1,11 @@
-use crate::parser::{
-    ast::*,
-    expr::*,
-    stmt::*,
-    util::{is_special_variable, parse_func_name, parse_name, skip_wrapping_spaces},
+use crate::{
+    interpreter::functions::builtins::is_builtin,
+    parser::{
+        ast::*,
+        expr::*,
+        stmt::*,
+        util::{is_special_variable, parse_func_name, parse_name, skip_wrapping_spaces},
+    },
 };
 use combine::{
     error::{ParseError, StreamError},
@@ -104,6 +107,11 @@ parser! {
             parse_stmt_list(),
         )
             .and_then(|(_, fname, args, body): (&'static str, String, Vec<String>, StmtList)| {
+                if is_builtin(&fname) {
+                    let msg = format!("{}", crate::errors::ParseError::Builtin(fname));
+                    let err = StreamErrorFor::<I>::message_message(msg);
+                    return Err(err);
+                }
                 let set: HashSet<&String> = args.iter().collect();
                 if set.len() != args.len() {
                     let msg = format!("{}", crate::errors::ParseError::DuplicateParams(fname));
@@ -208,6 +216,12 @@ mod tests {
         assert!(prog.is_err(), "input: {}\n{:?}", input, prog.unwrap());
         let msg = format!("{}", prog.unwrap_err());
         assert!(msg.contains("Cannot use a special variable as a function parameter"));
+
+        let input = "function index() {}";
+        let prog = parse_program().easy_parse(State::new(input));
+        assert!(prog.is_err(), "input: {}\n{:?}", input, prog.unwrap());
+        let msg = format!("{}", prog.unwrap_err());
+        assert!(msg.contains("Function index is a built-in"));
     }
 
     #[test]

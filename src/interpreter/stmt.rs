@@ -5,6 +5,8 @@ use crate::{
 };
 use std::io::Write;
 
+mod printf;
+
 #[derive(Debug)]
 pub enum StmtResult {
     Break,
@@ -40,6 +42,7 @@ impl Eval for Stmt {
                 write!(rt.output, "{}", rt.vars.ors)?;
                 Ok(None)
             },
+            Stmt::Printf(exprs, redir) => printf::execute(rt, exprs, redir),
             Stmt::ForIn(var, array, body) => {
                 for key in rt.vars.array_keys(array)? {
                     rt.vars
