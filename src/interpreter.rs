@@ -20,6 +20,7 @@ where
     vars: variables::Variables,
     record: record::Record,
     funcs: functions::Functions,
+    redirs: stmt::redirections::Redirections,
     begin_patterns: Vec<Item>,
     end_patterns: Vec<Item>,
     patterns: Vec<EvalItem>,
@@ -33,6 +34,7 @@ where
     vars: &'a mut variables::Variables,
     record: &'a mut record::Record,
     funcs: &'a functions::Functions,
+    redirs: &'a mut stmt::redirections::Redirections,
 }
 
 impl<'a, Output> RuntimeMut<'a, Output>
@@ -44,12 +46,14 @@ where
         vars: &'a mut variables::Variables,
         record: &'a mut record::Record,
         funcs: &'a functions::Functions,
+        redirs: &'a mut stmt::redirections::Redirections,
     ) -> RuntimeMut<'a, Output> {
         RuntimeMut {
             output,
             vars,
             record,
             funcs,
+            redirs,
         }
     }
 }
@@ -85,6 +89,7 @@ where
             vars: variables::Variables::new(),
             record: record::Record::new(),
             funcs: functions::Functions::new(),
+            redirs: stmt::redirections::Redirections::new(),
         };
         for item in program.items.into_iter() {
             match item {
@@ -110,6 +115,7 @@ where
             &mut self.vars,
             &mut self.record,
             &self.funcs,
+            &mut self.redirs,
         );
         for pattern in &self.begin_patterns {
             if let Item::PatternAction(Some(Pattern::Begin), stmts) = pattern {
@@ -129,6 +135,7 @@ where
             &mut self.vars,
             &mut self.record,
             &self.funcs,
+            &mut self.redirs,
         );
         for pattern in &self.end_patterns {
             if let Item::PatternAction(Some(Pattern::End), stmts) = pattern {
@@ -148,6 +155,7 @@ where
             &mut self.vars,
             &mut self.record,
             &self.funcs,
+            &mut self.redirs,
         );
         for eval_item in self.patterns.iter_mut() {
             if let Item::PatternAction(pattern, stmts) = &eval_item.item {

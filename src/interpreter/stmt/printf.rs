@@ -1,7 +1,7 @@
 use crate::{
     errors::EvaluationError,
     interpreter::{stmt::StmtResult, value::Value, Eval, RuntimeMut},
-    parser::ast::{ExprList, OutputRedirection},
+    parser::ast::ExprList,
 };
 use std::io::Write;
 
@@ -200,7 +200,7 @@ impl ConversionSpecifier {
 pub fn execute<Output>(
     rt: &mut RuntimeMut<'_, Output>,
     exprs: &ExprList,
-    redir: &Option<OutputRedirection>,
+    path: Option<String>,
 ) -> Result<Option<StmtResult>, EvaluationError>
 where
     Output: Write,
@@ -215,17 +215,90 @@ where
                 Ok(conv) => match iter.next() {
                     Some(value) => {
                         let value = value.eval(rt)?;
-                        conv.convert(rt.output, value)?
+                        match &path {
+                            Some(path) => {
+                                let file = rt.redirs.get_file(path);
+                                conv.convert(file, value)?;
+                            },
+                            None => conv.convert(rt.output, value)?,
+                        }
                     },
                     None => return Err(EvaluationError::MissingFormatStringArgs(format)),
                 },
-                Err(err) => write!(rt.output, "{}", err)?,
+                Err(err) => match &path {
+                    Some(path) => {
+                        let file = rt.redirs.get_file(path);
+                        write!(file, "{}", err)?;
+                    },
+                    None => write!(rt.output, "{}", err)?,
+                },
             },
             '\\' => match format_iter.next().unwrap() {
-                'n' => write!(rt.output, "{}", '\n')?,
+                '\\' => match &path {
+                    Some(path) => {
+                        let file = rt.redirs.get_file(path);
+                        write!(file, "{}", '\\')?;
+                    },
+                    None => write!(rt.output, "{}", '\\')?,
+                },
+                'a' => match &path {
+                    Some(path) => {
+                        let file = rt.redirs.get_file(path);
+                        write!(file, "{}", '\x07')?;
+                    },
+                    None => write!(rt.output, "{}", '\x07')?,
+                },
+                'b' => match &path {
+                    Some(path) => {
+                        let file = rt.redirs.get_file(path);
+                        write!(file, "{}", '\x08')?;
+                    },
+                    None => write!(rt.output, "{}", '\x08')?,
+                },
+                'f' => match &path {
+                    Some(path) => {
+                        let file = rt.redirs.get_file(path);
+                        write!(file, "{}", '\x0C')?;
+                    },
+                    None => write!(rt.output, "{}", '\x0C')?,
+                },
+                'n' => match &path {
+                    Some(path) => {
+                        let file = rt.redirs.get_file(path);
+                        write!(file, "{}", '\n')?;
+                    },
+                    None => write!(rt.output, "{}", '\n')?,
+                },
+                'r' => match &path {
+                    Some(path) => {
+                        let file = rt.redirs.get_file(path);
+                        write!(file, "{}", '\r')?;
+                    },
+                    None => write!(rt.output, "{}", '\r')?,
+                },
+                't' => match &path {
+                    Some(path) => {
+                        let file = rt.redirs.get_file(path);
+                        write!(file, "{}", '\t')?;
+                    },
+                    None => write!(rt.output, "{}", '\t')?,
+                },
+                'v' => match &path {
+                    Some(path) => {
+                        let file = rt.redirs.get_file(path);
+                        write!(file, "{}", '\x0B')?;
+                    },
+                    None => write!(rt.output, "{}", '\x0B')?,
+                },
                 _ => unimplemented!(),
             },
-            _ => write!(rt.output, "{}", c)?,
+            _ => match &path {
+                Some(path) => {
+                    let file = rt.redirs.get_file(path);
+                    write!(file, "{}", c)?;
+                },
+                None => write!(rt.output, "{}", c)?,
+            },
         }
     }
     Ok(None)

@@ -6,6 +6,7 @@ use crate::{
 use std::io::Write;
 
 mod printf;
+pub mod redirections;
 
 #[derive(Debug)]
 pub enum StmtResult {
@@ -25,24 +26,44 @@ impl Eval for Stmt {
         Output: Write,
     {
         match self {
-            Stmt::Print(exprs, _redir) => {
-                for (i, expr) in exprs.0.iter().enumerate() {
-                    let val = expr.eval(rt)?;
-                    write!(
-                        rt.output,
+            Stmt::Print(exprs, redir) => {
+                let path = if let Some(redir) = redir {
+                    let path = redirections::file_name(rt, &redir)?;
+                    rt.redirs.add_file(&path, redir)?;
+                    Some(path)
+                } else {
+                    None
+                };
+                let format_value = |sep: &str, i: usize, val: Value| {
+                    format!(
                         "{}{}",
                         val.as_string(),
-                        if i + 1 == exprs.len() {
-                            ""
-                        } else {
-                            &rt.vars.ofs
-                        }
-                    )?;
+                        if i + 1 == exprs.len() { "" } else { sep }
+                    )
+                };
+                for (i, expr) in exprs.0.iter().enumerate() {
+                    let val = expr.eval(rt)?;
+                    match &path {
+                        Some(path) => {
+                            let file = rt.redirs.get_file(path);
+                            write!(file, "{}", format_value(&rt.vars.ofs, i, val))?;
+                        },
+                        None => {
+                            write!(rt.output, "{}", format_value(&rt.vars.ofs, i, val))?;
+                        },
+                    }
                 }
                 write!(rt.output, "{}", rt.vars.ors)?;
                 Ok(None)
             },
-            Stmt::Printf(exprs, redir) => printf::execute(rt, exprs, redir),
+            Stmt::Printf(exprs, redir) => match redir {
+                Some(redir) => {
+                    let path = redirections::file_name(rt, &redir)?;
+                    rt.redirs.add_file(&path, redir)?;
+                    printf::execute(rt, exprs, Some(path))
+                },
+                None => printf::execute(rt, exprs, None),
+            },
             Stmt::ForIn(var, array, body) => {
                 for key in rt.vars.array_keys(array)? {
                     rt.vars
@@ -155,7 +176,13 @@ mod tests {
         stmt: &Stmt,
         rt: &mut Runtime<'_, Cursor<Vec<u8>>>,
     ) -> Result<Option<StmtResult>, EvaluationError> {
-        let mut rt_mut = RuntimeMut::new(rt.output, &mut rt.vars, &mut rt.record, &rt.funcs);
+        let mut rt_mut = RuntimeMut::new(
+            rt.output,
+            &mut rt.vars,
+            &mut rt.record,
+            &rt.funcs,
+            &mut rt.redirs,
+        );
         stmt.eval(&mut rt_mut)
     }
 
