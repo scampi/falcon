@@ -1,10 +1,11 @@
 use combine::{
+    attempt,
     error::{ParseError, StreamError},
     parser::{
         char::{alpha_num, char, letter, spaces},
         item::one_of,
         range::{recognize, take_while1},
-        repeat::{escaped, many},
+        repeat::{escaped, many, skip_many, skip_until},
         sequence::between,
         Parser,
     },
@@ -118,6 +119,20 @@ where
     spaces().with(p.skip(spaces()))
 }
 
+pub fn skip_comments<P>(p: P) -> impl Parser<Input = P::Input, Output = P::Output>
+where
+    P: Parser,
+    P::Input: Stream<Item = char>,
+    <P::Input as StreamOnce>::Error: ParseError<
+        <P::Input as StreamOnce>::Item,
+        <P::Input as StreamOnce>::Range,
+        <P::Input as StreamOnce>::Position,
+    >,
+{
+    skip_many(char('#').and(skip_until(char('\n'))))
+        .with(p.skip(skip_many(char('#').and(skip_until(char('\n'))))))
+}
+
 pub fn is_special_variable(name: &str) -> bool {
     match name {
         "FNR" | "FS" | "NF" | "NR" | "SUBSEP" => true,
@@ -128,7 +143,10 @@ pub fn is_special_variable(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use combine::{parser::char::digit, stream::state::State};
+    use combine::{
+        parser::{char::digit, repeat::many},
+        stream::state::State,
+    };
 
     fn is_valid_name(name: &str) {
         let res = parse_name().easy_parse(name);
@@ -216,5 +234,23 @@ mod tests {
         is_valid_regexp("gargoyles");
         is_valid_regexp("john connor");
         is_valid_regexp(r#"aaa\/bbb"#);
+    }
+
+    #[test]
+    fn comment() {
+        let data = [("abc#def\n", "abc"), ("#def\nabc", "abc")];
+        for (i, (input, expected)) in data.iter().enumerate() {
+            let res = skip_comments(skip_wrapping_spaces(many::<String, _>(letter())))
+                .easy_parse(State::new(*input));
+            assert!(res.is_ok(), "failed on data[{}]: {}", i, res.unwrap_err());
+            let res = res.unwrap();
+            assert_eq!(
+                res.0,
+                String::from(*expected),
+                "failed on data[{}]: {:?}",
+                i,
+                res
+            );
+        }
     }
 }

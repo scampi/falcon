@@ -1,7 +1,7 @@
 use crate::parser::{
     ast::*,
     expr::*,
-    util::{parse_name, skip_wrapping_spaces},
+    util::{parse_name, skip_comments, skip_wrapping_spaces},
 };
 use combine::{
     error::ParseError,
@@ -39,16 +39,18 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        choice((
-            attempt(parse_terminatable()),
-            attempt(parse_if_else()),
-            attempt(parse_while()),
-            attempt(parse_do_while()),
-            attempt(parse_for()),
-            attempt(parse_for_in()),
-            attempt(parse_stmt_list().map(|stmts| Stmt::Block(stmts))),
-        ))
-        .skip(skip_many(one_of(" \r\n\t;".chars())))
+        skip_comments(
+            choice((
+                attempt(parse_terminatable()),
+                attempt(parse_if_else()),
+                attempt(parse_while()),
+                attempt(parse_do_while()),
+                attempt(parse_for()),
+                attempt(parse_for_in()),
+                attempt(parse_stmt_list().map(|stmts| Stmt::Block(stmts))),
+            ))
+            .skip(skip_many(one_of(" \r\n\t;".chars())))
+        )
     }
 }
 
