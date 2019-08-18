@@ -1,8 +1,7 @@
 use combine::{
-    attempt,
     error::{ParseError, StreamError},
     parser::{
-        char::{alpha_num, char, letter, spaces},
+        char::{alpha_num, char, letter},
         item::one_of,
         range::{recognize, take_while1},
         repeat::{escaped, many, skip_many, skip_until},
@@ -17,7 +16,7 @@ where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    spaces()
+    skip_whitespaces()
         .with(letter().or(char('_')))
         .and(many::<String, _>(alpha_num().or(char('_'))))
         .map(|(start, rest)| format!("{}{}", start, rest))
@@ -38,7 +37,7 @@ where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    spaces()
+    skip_whitespaces()
         .with(letter().or(char('_')))
         .and(many::<String, _>(alpha_num().or(char('_'))))
         .map(|(start, rest)| format!("{}{}", start, rest))
@@ -78,8 +77,8 @@ where
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     between(
-        spaces().with(char('"')),
-        char('"').skip(spaces()),
+        skip_whitespaces().with(char('"')),
+        char('"').skip(skip_whitespaces()),
         recognize(escaped(
             take_while1(|c| c != '"' && c != '\\'),
             '\\',
@@ -95,8 +94,8 @@ where
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     between(
-        spaces().with(char('/')),
-        char('/').skip(spaces()),
+        skip_whitespaces().with(char('/')),
+        char('/').skip(skip_whitespaces()),
         recognize(escaped(
             take_while1(|c| c != '/' && c != '\\'),
             '\\',
@@ -104,6 +103,19 @@ where
         )),
     )
     .map(|s: &str| s.to_owned())
+}
+
+pub fn skip_all_wrapping_spaces<P>(p: P) -> impl Parser<Input = P::Input, Output = P::Output>
+where
+    P: Parser,
+    P::Input: Stream<Item = char>,
+    <P::Input as StreamOnce>::Error: ParseError<
+        <P::Input as StreamOnce>::Item,
+        <P::Input as StreamOnce>::Range,
+        <P::Input as StreamOnce>::Position,
+    >,
+{
+    skip_many(one_of("\r\n\t ".chars())).with(p.skip(skip_many(one_of("\r\n\t ".chars()))))
 }
 
 pub fn skip_wrapping_spaces<P>(p: P) -> impl Parser<Input = P::Input, Output = P::Output>
@@ -116,7 +128,38 @@ where
         <P::Input as StreamOnce>::Position,
     >,
 {
-    spaces().with(p.skip(spaces()))
+    skip_whitespaces().with(p.skip(skip_whitespaces()))
+}
+
+pub fn skip_whitespaces<I>() -> impl Parser<Input = I>
+where
+    I: Stream<Item = char>,
+    <I as StreamOnce>::Error:
+        ParseError<<I as StreamOnce>::Item, <I as StreamOnce>::Range, <I as StreamOnce>::Position>,
+{
+    skip_many(one_of("\t ".chars()))
+}
+
+pub fn skip_wrapping_newlines<P>(p: P) -> impl Parser<Input = P::Input, Output = P::Output>
+where
+    P: Parser,
+    P::Input: Stream<Item = char>,
+    <P::Input as StreamOnce>::Error: ParseError<
+        <P::Input as StreamOnce>::Item,
+        <P::Input as StreamOnce>::Range,
+        <P::Input as StreamOnce>::Position,
+    >,
+{
+    skip_newlines().with(p.skip(skip_newlines()))
+}
+
+pub fn skip_newlines<I>() -> impl Parser<Input = I>
+where
+    I: Stream<Item = char>,
+    <I as StreamOnce>::Error:
+        ParseError<<I as StreamOnce>::Item, <I as StreamOnce>::Range, <I as StreamOnce>::Position>,
+{
+    skip_many(one_of("\r\n".chars()))
 }
 
 pub fn skip_comments<P>(p: P) -> impl Parser<Input = P::Input, Output = P::Output>
@@ -129,8 +172,7 @@ where
         <P::Input as StreamOnce>::Position,
     >,
 {
-    skip_many(char('#').and(skip_until(char('\n'))))
-        .with(p.skip(skip_many(char('#').and(skip_until(char('\n'))))))
+    skip_many(char('#').and(skip_until(char('\n'))).and(char('\n'))).with(p)
 }
 
 pub fn is_special_variable(name: &str) -> bool {
@@ -238,7 +280,7 @@ mod tests {
 
     #[test]
     fn comment() {
-        let data = [("abc#def\n", "abc"), ("#def\nabc", "abc")];
+        let data = [("#abc\n#def\ntoto", "toto"), ("#def\nabc", "abc")];
         for (i, (input, expected)) in data.iter().enumerate() {
             let res = skip_comments(skip_wrapping_spaces(many::<String, _>(letter())))
                 .easy_parse(State::new(*input));

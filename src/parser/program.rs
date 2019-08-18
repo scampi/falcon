@@ -77,7 +77,7 @@ parser! {
             skip_wrapping_spaces(string("BEGIN")).map(|_| Pattern::Begin),
             skip_wrapping_spaces(string("END")).map(|_| Pattern::End),
             parse_expr()
-                .and(optional(skip_wrapping_spaces(char(',')).with(parse_expr())))
+                .and(optional(skip_wrapping_spaces(char(',')).and(skip_many(char('\n'))).with(parse_expr())))
                 .map(|(e1, e2)| {
                     if let Some(e2) = e2 {
                         Pattern::Range(e1, e2)

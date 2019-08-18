@@ -1,11 +1,14 @@
 use crate::parser::{
     ast::*,
-    util::{parse_func_name, parse_name, parse_regexp, parse_string, skip_wrapping_spaces},
+    util::{
+        parse_func_name, parse_name, parse_regexp, parse_string, skip_all_wrapping_spaces,
+        skip_newlines, skip_whitespaces, skip_wrapping_spaces,
+    },
 };
 use combine::{
     error::{ParseError, StreamError},
     parser::{
-        char::{char, digit, spaces, string},
+        char::{char, digit, string},
         choice::{choice, optional},
         combinator::attempt,
         item::one_of,
@@ -94,7 +97,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by(parse_print_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+        sep_by(parse_print_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
     }
 }
 
@@ -105,7 +108,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by1(parse_print_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+        sep_by1(parse_print_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
     }
 }
 
@@ -116,7 +119,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by(parse_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+        sep_by(parse_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
     }
 }
 
@@ -127,7 +130,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by1(parse_expr(), attempt(skip_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+        sep_by1(parse_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
     }
 }
 
@@ -348,7 +351,7 @@ parser! {
     ]
     {
         p.and(optional(many1::<Vec<Expr>, _>(
-            attempt(skip_wrapping_spaces(string("&&"))).with(parse_array_expr(parse_match_expr(
+            attempt(skip_wrapping_spaces(string("&&")).skip(skip_newlines())).with(parse_array_expr(parse_match_expr(
                 *print_expr,
                 parse_comparison_expr(
                     *print_expr,
@@ -382,7 +385,7 @@ parser! {
     ]
     {
         p.and(optional(many1::<Vec<Expr>, _>(
-            attempt(skip_wrapping_spaces(string("||"))).with(parse_and_expr(
+            attempt(skip_wrapping_spaces(string("||")).skip(skip_newlines())).with(parse_and_expr(
                 *print_expr,
                 parse_array_expr(parse_match_expr(
                     *print_expr,
@@ -520,7 +523,7 @@ parser! {
                 parse_func_name()
                 .and(
                     between(
-                        char('(').skip(spaces()),
+                        skip_wrapping_spaces(char('(')),
                         skip_wrapping_spaces(char(')')),
                         parse_expr_list(),
                     )
@@ -539,7 +542,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        spaces()
+        skip_whitespaces()
             .with(many1(digit()))
             .and(optional(char('.').with(many1(digit()))))
             .map(|(i, f): (String, Option<String>)| {
@@ -574,7 +577,7 @@ parser! {
                     ))
                     .map(|(name, exprs)| LValueType::Brackets(name, exprs))
             ),
-            attempt(spaces().skip(char('$')))
+            attempt(skip_whitespaces().skip(char('$')))
             .with(leaf())
             .map(|expr| LValueType::Dollar(Box::new(expr))),
             attempt(parse_name().map(|name| LValueType::Name(name))),

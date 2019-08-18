@@ -1,7 +1,9 @@
 use crate::parser::{
     ast::*,
     expr::*,
-    util::{parse_name, skip_comments, skip_wrapping_spaces},
+    util::{
+        parse_name, skip_comments, skip_newlines, skip_wrapping_newlines, skip_wrapping_spaces,
+    },
 };
 use combine::{
     error::ParseError,
@@ -62,8 +64,8 @@ parser! {
     ]
     {
         between(
-            skip_wrapping_spaces(char('{')),
-            skip_wrapping_spaces(char('}')),
+            skip_wrapping_newlines(skip_wrapping_spaces(char('{'))),
+            skip_wrapping_newlines(skip_wrapping_spaces(char('}'))),
             many::<Vec<Stmt>, _>(parse_stmt()).map(|stmts| StmtList(stmts)),
         )
     }
@@ -80,12 +82,12 @@ parser! {
             skip_wrapping_spaces(string("if")),
             between(
                 skip_wrapping_spaces(char('(')),
-                skip_wrapping_spaces(char(')')),
+                skip_wrapping_spaces(char(')')).skip(skip_newlines()),
                 parse_expr(),
             ),
             parse_stmt(),
             attempt(optional(
-                skip_wrapping_spaces(string("else"))
+                skip_wrapping_spaces(string("else")).skip(skip_newlines())
                 .with(parse_stmt())
             )),
         )
@@ -103,7 +105,7 @@ parser! {
         skip_wrapping_spaces(string("while"))
             .with(between(
                 skip_wrapping_spaces(char('(')),
-                skip_wrapping_spaces(char(')')),
+                skip_wrapping_spaces(char(')')).skip(skip_newlines()),
                 parse_expr(),
             ))
             .and(parse_stmt())
@@ -118,7 +120,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        skip_wrapping_spaces(string("do"))
+        skip_wrapping_spaces(string("do")).skip(skip_newlines())
             .with(parse_stmt())
             .skip(skip_wrapping_spaces(string("while")))
             .and(between(
@@ -144,7 +146,7 @@ parser! {
             optional(parse_expr()),
             skip_wrapping_spaces(char(';')),
             optional(parse_simple_stmt()),
-            skip_wrapping_spaces(char(')')),
+            skip_wrapping_spaces(char(')')).skip(skip_newlines()),
             parse_stmt(),
         )
         .map(|(_, start, _, until, _, step, _, body)|
@@ -170,7 +172,7 @@ parser! {
             parse_name(),
             skip_wrapping_spaces(string("in")),
             parse_name(),
-            skip_wrapping_spaces(char(')')),
+            skip_wrapping_spaces(char(')')).skip(skip_newlines()),
             parse_stmt(),
         )
         .map(|(_, a, _, b, _, body)| Stmt::ForIn(a, b, Box::new(body)))
@@ -526,6 +528,21 @@ mod tests {
     fn do_while() {
         assert_stmt(
             "do a++; while (a < 10)",
+            Stmt::DoWhile(
+                Expr::Comparison(
+                    CmpOperator::LessThan,
+                    Box::new(Expr::LValue(LValueType::Name("a".to_owned()))),
+                    Box::new(Expr::Number(10f64)),
+                ),
+                Box::new(Stmt::Expr(Expr::PostIncrement(LValueType::Name(
+                    "a".to_owned(),
+                )))),
+            ),
+        );
+        assert_stmt(
+            r#"do
+                a++
+            while (a < 10)"#,
             Stmt::DoWhile(
                 Expr::Comparison(
                     CmpOperator::LessThan,

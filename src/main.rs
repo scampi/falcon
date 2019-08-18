@@ -27,6 +27,9 @@ struct Cli {
     #[structopt(name = "file", short, long, value_name = "FILE", parse(from_os_str))]
     /// The path to the AWK script file to execute.
     program_file: Option<PathBuf>,
+    #[structopt(name = "dump-ast", long)]
+    /// Dump the AST and exit.
+    dump_ast: bool,
     #[structopt(name = "program")]
     /// The AWK script passed as argument.
     program_str: Option<String>,
@@ -66,7 +69,9 @@ fn main() {
     } else {
         get_program(&cli.program_str.unwrap())
     };
-    if let Err(e) = run_program(program, cli.inputs) {
+    if cli.dump_ast {
+        println!("{:#?}", program);
+    } else if let Err(e) = run_program(program, cli.inputs) {
         eprintln!("{}", e);
         process::exit(exitcode::USAGE);
     }
