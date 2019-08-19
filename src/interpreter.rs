@@ -7,6 +7,7 @@ use std::io::Write;
 mod expr;
 pub mod functions;
 mod record;
+mod rnd;
 mod stmt;
 mod value;
 mod variables;
@@ -21,6 +22,7 @@ where
     record: record::Record,
     funcs: functions::Functions,
     redirs: stmt::redirections::Redirections,
+    rnd: rnd::Rnd,
     begin_patterns: Vec<Item>,
     end_patterns: Vec<Item>,
     patterns: Vec<EvalItem>,
@@ -35,6 +37,7 @@ where
     record: &'a mut record::Record,
     funcs: &'a functions::Functions,
     redirs: &'a mut stmt::redirections::Redirections,
+    rnd: &'a mut rnd::Rnd,
 }
 
 impl<'a, Output> RuntimeMut<'a, Output>
@@ -47,6 +50,7 @@ where
         record: &'a mut record::Record,
         funcs: &'a functions::Functions,
         redirs: &'a mut stmt::redirections::Redirections,
+        rnd: &'a mut rnd::Rnd,
     ) -> RuntimeMut<'a, Output> {
         RuntimeMut {
             output,
@@ -54,6 +58,7 @@ where
             record,
             funcs,
             redirs,
+            rnd,
         }
     }
 }
@@ -90,6 +95,7 @@ where
             record: record::Record::new(),
             funcs: functions::Functions::new(),
             redirs: stmt::redirections::Redirections::new(),
+            rnd: rnd::Rnd::new(),
         };
         for item in program.items.into_iter() {
             match item {
@@ -116,6 +122,7 @@ where
             &mut self.record,
             &self.funcs,
             &mut self.redirs,
+            &mut self.rnd,
         );
         for pattern in &self.begin_patterns {
             if let Item::PatternAction(Some(Pattern::Begin), stmts) = pattern {
@@ -136,6 +143,7 @@ where
             &mut self.record,
             &self.funcs,
             &mut self.redirs,
+            &mut self.rnd,
         );
         for pattern in &self.end_patterns {
             if let Item::PatternAction(Some(Pattern::End), stmts) = pattern {
@@ -156,6 +164,7 @@ where
             &mut self.record,
             &self.funcs,
             &mut self.redirs,
+            &mut self.rnd,
         );
         for eval_item in self.patterns.iter_mut() {
             if let Item::PatternAction(pattern, stmts) = &eval_item.item {
@@ -359,7 +368,7 @@ mod tests {
                 }
                 return c;
             }
-            { 
+            {
                 my_array[0] = 5;
                 my_array[1] = 6;
                 result = join(my_array);

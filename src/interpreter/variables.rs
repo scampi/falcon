@@ -40,7 +40,7 @@ pub struct Variables {
     pub nf: usize,
     /// The ordinal number of the current record from the start of input
     pub nr: usize,
-    //ofmt: String,
+    pub ofmt: String,
     pub ofs: String,
     pub ors: String,
     //rlength: usize,
@@ -58,6 +58,7 @@ impl Variables {
             fs: String::from(" "),
             nf: 0,
             nr: 0,
+            ofmt: String::from("%.6g"),
             ofs: String::from(" "),
             ors: String::from("\n"),
             subsep: String::new(),
@@ -71,7 +72,7 @@ impl Variables {
 
     fn is_special_variable(&self, name: &str) -> bool {
         match name {
-            "FNR" | "FS" | "NF" | "NR" | "OFS" | "ORS" | "SUBSEP" => true,
+            "FNR" | "FS" | "NF" | "NR" | "OFMT" | "OFS" | "ORS" | "SUBSEP" => true,
             _ => false,
         }
     }
@@ -154,6 +155,7 @@ impl Variables {
             "FS" => Ok(Value::from(self.fs.to_owned())),
             "NF" => Ok(Value::from(self.nf)),
             "NR" => Ok(Value::from(self.nr)),
+            "OFMT" => Ok(Value::from(self.ofmt.to_owned())),
             "OFS" => Ok(Value::from(self.ofs.to_owned())),
             "ORS" => Ok(Value::from(self.ors.to_owned())),
             "SUBSEP" => Ok(Value::from(self.subsep.to_owned())),
@@ -233,6 +235,11 @@ impl Variables {
                 let result = Value::compute(ty, Value::from(self.nr), new_value)?;
                 self.nr = result.as_number() as usize;
                 Ok(Value::from(self.nr))
+            },
+            "OFMT" => {
+                let result = Value::compute(ty, Value::from(self.ofmt.to_owned()), new_value)?;
+                self.ofmt = result.as_string();
+                Ok(Value::from(self.ofmt.to_owned()))
             },
             "OFS" => {
                 let result = Value::compute(ty, Value::from(self.ofs.to_owned()), new_value)?;

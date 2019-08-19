@@ -1,7 +1,11 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{stmt::StmtResult, value::Value, Eval, RuntimeMut},
-    parser::ast::ExprList,
+    interpreter::{
+        stmt::{redirections::file_name, StmtResult},
+        value::Value,
+        Eval, RuntimeMut,
+    },
+    parser::ast::{ExprList, OutputRedirection},
 };
 use std::io::Write;
 
@@ -86,7 +90,7 @@ impl Conversion {
     fn convert<Output: Write>(
         &self,
         output: &mut Output,
-        value: Value,
+        value: &Value,
     ) -> Result<(), EvaluationError> {
         match self.specifier {
             ConversionSpecifier::Float => self.convert_float(output, value),
@@ -98,7 +102,7 @@ impl Conversion {
     fn convert_float<Output: Write>(
         &self,
         output: &mut Output,
-        value: Value,
+        value: &Value,
     ) -> Result<(), EvaluationError> {
         let value = value.as_number();
         let trunc = value.trunc().abs().to_string();
@@ -146,7 +150,7 @@ impl Conversion {
     fn convert_string<Output: Write>(
         &self,
         output: &mut Output,
-        value: Value,
+        value: &Value,
     ) -> Result<(), EvaluationError> {
         let value = if let Some(precision) = self.precision {
             value.as_string().get(0..precision).unwrap().to_string()
@@ -197,14 +201,57 @@ impl ConversionSpecifier {
     }
 }
 
+pub fn execute_value<Output: Write>(
+    format: &str,
+    value: Option<Value>,
+    output: &mut Output,
+) -> Result<(), EvaluationError> {
+    let mut format_iter = format.chars();
+
+    while let Some(c) = format_iter.next() {
+        match c {
+            '%' => match Conversion::new(&mut format_iter) {
+                Ok(conv) => match &value {
+                    Some(value) => conv.convert(output, value)?,
+                    None => {
+                        return Err(EvaluationError::MissingFormatStringArgs(format.to_owned()));
+                    },
+                },
+                Err(err) => write!(output, "{}", err)?,
+            },
+            '\\' => match format_iter.next().unwrap() {
+                '\\' => write!(output, "{}", '\\')?,
+                'a' => write!(output, "{}", '\x07')?,
+                'b' => write!(output, "{}", '\x08')?,
+                'f' => write!(output, "{}", '\x0C')?,
+                'n' => write!(output, "{}", '\n')?,
+                'r' => write!(output, "{}", '\r')?,
+                't' => write!(output, "{}", '\t')?,
+                'v' => write!(output, "{}", '\x0B')?,
+                _ => unimplemented!(),
+            },
+            _ => write!(output, "{}", c)?,
+        }
+    }
+    Ok(())
+}
+
 pub fn execute<Output>(
     rt: &mut RuntimeMut<'_, Output>,
     exprs: &ExprList,
-    path: Option<String>,
+    redir: &Option<OutputRedirection>,
 ) -> Result<Option<StmtResult>, EvaluationError>
 where
     Output: Write,
 {
+    let path = if let Some(redir) = redir {
+        let path = file_name(rt, &redir)?;
+        rt.redirs.add_file(&path, redir)?;
+        Some(path)
+    } else {
+        None
+    };
+
     let mut iter = exprs.0.iter();
     let format = iter.next().unwrap().eval(rt)?.as_string();
     let mut format_iter = format.chars();
@@ -218,9 +265,9 @@ where
                         match &path {
                             Some(path) => {
                                 let file = rt.redirs.get_file(path);
-                                conv.convert(file, value)?;
+                                conv.convert(file, &value)?;
                             },
-                            None => conv.convert(rt.output, value)?,
+                            None => conv.convert(rt.output, &value)?,
                         }
                     },
                     None => return Err(EvaluationError::MissingFormatStringArgs(format)),
@@ -358,7 +405,7 @@ mod tests {
         for (i, (fmt, arg, expected)) in data.iter().enumerate() {
             let mut out = Cursor::new(Vec::new());
             let conv = Conversion::new(&mut fmt.chars()).unwrap();
-            conv.convert(&mut out, arg.clone()).unwrap();
+            conv.convert(&mut out, &arg).unwrap();
             assert_eq!(
                 String::from_utf8(out.into_inner()).unwrap(),
                 *expected,
@@ -384,7 +431,7 @@ mod tests {
         for (i, (fmt, arg, expected)) in data.iter().enumerate() {
             let mut out = Cursor::new(Vec::new());
             let conv = Conversion::new(&mut fmt.chars()).unwrap();
-            conv.convert(&mut out, arg.clone()).unwrap();
+            conv.convert(&mut out, &arg).unwrap();
             assert_eq!(
                 String::from_utf8(out.into_inner()).unwrap(),
                 *expected,

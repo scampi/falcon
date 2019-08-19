@@ -213,6 +213,7 @@ mod tests {
             &mut rt.record,
             &rt.funcs,
             &mut rt.redirs,
+            &mut rt.rnd,
         );
         expr.eval(&mut rt_mut)
     }

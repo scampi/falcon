@@ -2,6 +2,8 @@
 mod common;
 
 use common::run_test;
+use std::{fs::File, io::prelude::*};
+use tempfile::NamedTempFile;
 
 #[test]
 fn index_substr() {
@@ -30,4 +32,39 @@ fn toupper_tolower() {
         r#"{ printf("%s|%s|%s\n", tolower($0), toupper($0), $0)}"#,
         "hello, world!|HELLO, WORLD!|hello, WORLD!\n",
     )
+}
+
+#[test]
+fn rand() {
+    let mut file1 = NamedTempFile::new().unwrap();
+    let path1 = file1.into_temp_path();
+    let mut file2 = NamedTempFile::new().unwrap();
+    let path2 = file2.into_temp_path();
+
+    let script = r#"
+        BEGIN {
+            s = srand(1)	# set a real random start
+            for (i = 1; i <= 10; i++)
+                    print rand() >"FILE1"
+            srand(s)	# reset it
+            for (i = 1; i <= 10; i++)
+                    print rand() >"FILE2"
+        }
+        "#;
+    let script = script.replace("FILE1", &path1.to_string_lossy());
+    let script = script.replace("FILE2", &path2.to_string_lossy());
+
+    run_test(None, &script, "");
+
+    let mut contents1 = String::new();
+    File::open(path1)
+        .unwrap()
+        .read_to_string(&mut contents1)
+        .unwrap();
+    let mut contents2 = String::new();
+    File::open(path2)
+        .unwrap()
+        .read_to_string(&mut contents2)
+        .unwrap();
+    assert_eq!(contents1, contents2);
 }

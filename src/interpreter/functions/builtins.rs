@@ -1,6 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{value::Value, RuntimeMut},
+    interpreter::{rnd::Rnd, value::Value, RuntimeMut},
     parser::ast::ExprList,
 };
 use std::io::Write;
@@ -16,6 +16,8 @@ pub fn is_builtin(name: &str) -> bool {
         "log" => true,
         "toupper" => true,
         "tolower" => true,
+        "rand" => true,
+        "srand" => true,
         _ => false,
     }
 }
@@ -38,6 +40,11 @@ where
         "log" => log::execute(args, rt),
         "toupper" => toupper::execute(args, rt),
         "tolower" => tolower::execute(args, rt),
+        "rand" => rt.rnd.rand(args),
+        "srand" => {
+            let seed = Rnd::srand_arg(args, rt)?;
+            rt.rnd.srand(seed)
+        },
         _ => unreachable!(),
     }
 }
