@@ -1,7 +1,7 @@
 use crate::{
     errors::EvaluationError,
     interpreter::{
-        stmt::{printf::execute_value, redirections::file_name, StmtResult},
+        stmt::{printf::convert_values, redirections::file_name, StmtResult},
         value::Value,
         Eval, RuntimeMut,
     },
@@ -46,14 +46,16 @@ where
                 Some(path) => {
                     let mut file = rt.redirs.get_file(path);
                     if let Value::Number(_) = val {
-                        execute_value(&ofmt, Some(val), &mut file)?;
+                        convert_values(&ofmt, ofmt.chars(), Some(val).into_iter(), &mut file)?;
+                        write!(file, "{}", sep)?;
                     } else {
                         write!(file, "{}{}", val.as_string(), sep)?;
                     }
                 },
                 None => {
                     if let Value::Number(_) = val {
-                        execute_value(&ofmt, Some(val), &mut rt.output)?;
+                        convert_values(&ofmt, ofmt.chars(), Some(val).into_iter(), &mut rt.output)?;
+                        write!(rt.output, "{}", sep)?;
                     } else {
                         write!(rt.output, "{}{}", val.as_string(), sep)?;
                     }

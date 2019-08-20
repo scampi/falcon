@@ -94,9 +94,84 @@ impl Conversion {
     ) -> Result<(), EvaluationError> {
         match self.specifier {
             ConversionSpecifier::Float => self.convert_float(output, value),
+            ConversionSpecifier::ExponentialLower => self.convert_exponential(output, value, true),
+            ConversionSpecifier::ExponentialUpper => self.convert_exponential(output, value, false),
             ConversionSpecifier::String => self.convert_string(output, value),
             _ => unimplemented!("{:?}", self.specifier),
         }
+    }
+
+    fn convert_exponential<Output: Write>(
+        &self,
+        output: &mut Output,
+        value: &Value,
+        lower: bool,
+    ) -> Result<(), EvaluationError> {
+        let value = value.as_number();
+        let precision = self.precision.unwrap_or(6);
+        let padding = if let Some(width) = self.width {
+            width.saturating_sub(
+                if value.is_sign_negative() || self.signed || self.space { 1 } else { 0 }
+                // 5 = mantissa + exponent
+                + 5
+                // 1 = '.'
+                + if precision != 0 { precision + 1 } else { 0 },
+            )
+        } else {
+            0
+        };
+
+        if padding != 0 && !self.leading_zeros {
+            write!(output, "{}", " ".repeat(padding))?;
+        }
+        if value.is_sign_positive() {
+            if self.signed {
+                write!(output, "+")?;
+            } else if self.space {
+                write!(output, " ")?;
+            }
+        } else {
+            write!(output, "-")?;
+        }
+        if padding != 0 && self.leading_zeros {
+            write!(output, "{}", "0".repeat(padding))?;
+        }
+
+        // exponent
+        let mut value = value.abs();
+        let exp = if value == 0_f64 {
+            0
+        } else if value >= 1_f64 {
+            let mut exp = 0;
+            while value > 10_f64 {
+                value = value / 10_f64;
+                exp += 1;
+            }
+            exp
+        } else {
+            let mut exp = 0;
+            while value < 1_f64 {
+                value = value * 10_f64;
+                exp += 1;
+            }
+            -exp
+        };
+
+        // mantissa
+        write!(output, "{}", value.trunc())?;
+
+        // fract
+        if precision != 0 {
+            let fract = (value.fract().abs() * 10_f64.powi(precision as i32)).round();
+            if fract == 0_f64 {
+                write!(output, ".{}", "0".repeat(precision))?;
+            } else {
+                write!(output, ".{}", fract)?;
+            }
+        }
+        write!(output, "{}{:+03}", if lower { 'e' } else { 'E' }, exp)?;
+
+        Ok(())
     }
 
     fn convert_float<Output: Write>(
@@ -172,6 +247,8 @@ enum ConversionSpecifier {
     UnsignedDecimal,
     UnsignedHexadecimalLower,
     UnsignedHexadecimalUpper,
+    ExponentialLower,
+    ExponentialUpper,
     Float,
     UnsignedChar,
     String,
@@ -192,7 +269,9 @@ impl ConversionSpecifier {
             'u' => Some(ConversionSpecifier::UnsignedDecimal),
             'x' => Some(ConversionSpecifier::UnsignedHexadecimalLower),
             'X' => Some(ConversionSpecifier::UnsignedHexadecimalUpper),
-            'f' | 'e' | 'E' | 'g' | 'G' => Some(ConversionSpecifier::Float),
+            'f' | 'F' | 'g' | 'G' => Some(ConversionSpecifier::Float),
+            'e' => Some(ConversionSpecifier::ExponentialLower),
+            'E' => Some(ConversionSpecifier::ExponentialUpper),
             'c' => Some(ConversionSpecifier::UnsignedChar),
             's' => Some(ConversionSpecifier::String),
             '%' => Some(ConversionSpecifier::Percent),
@@ -201,18 +280,21 @@ impl ConversionSpecifier {
     }
 }
 
-pub fn execute_value<Output: Write>(
+pub fn convert_values<
+    FormatIterator: Iterator<Item = char>,
+    ValueIterator: Iterator<Item = Value>,
+    Output: Write,
+>(
     format: &str,
-    value: Option<Value>,
+    mut format_iter: FormatIterator,
+    mut value: ValueIterator,
     output: &mut Output,
-) -> Result<(), EvaluationError> {
-    let mut format_iter = format.chars();
-
+) -> Result<Option<StmtResult>, EvaluationError> {
     while let Some(c) = format_iter.next() {
         match c {
             '%' => match Conversion::new(&mut format_iter) {
-                Ok(conv) => match &value {
-                    Some(value) => conv.convert(output, value)?,
+                Ok(conv) => match value.next() {
+                    Some(value) => conv.convert(output, &value)?,
                     None => {
                         return Err(EvaluationError::MissingFormatStringArgs(format.to_owned()));
                     },
@@ -233,7 +315,7 @@ pub fn execute_value<Output: Write>(
             _ => write!(output, "{}", c)?,
         }
     }
-    Ok(())
+    Ok(None)
 }
 
 pub fn execute<Output>(
@@ -254,101 +336,20 @@ where
 
     let mut iter = exprs.0.iter();
     let format = iter.next().unwrap().eval(rt)?.as_string();
-    let mut format_iter = format.chars();
+    let format_iter = format.chars();
 
-    while let Some(c) = format_iter.next() {
-        match c {
-            '%' => match Conversion::new(&mut format_iter) {
-                Ok(conv) => match iter.next() {
-                    Some(value) => {
-                        let value = value.eval(rt)?;
-                        match &path {
-                            Some(path) => {
-                                let file = rt.redirs.get_file(path);
-                                conv.convert(file, &value)?;
-                            },
-                            None => conv.convert(rt.output, &value)?,
-                        }
-                    },
-                    None => return Err(EvaluationError::MissingFormatStringArgs(format)),
-                },
-                Err(err) => match &path {
-                    Some(path) => {
-                        let file = rt.redirs.get_file(path);
-                        write!(file, "{}", err)?;
-                    },
-                    None => write!(rt.output, "{}", err)?,
-                },
-            },
-            '\\' => match format_iter.next().unwrap() {
-                '\\' => match &path {
-                    Some(path) => {
-                        let file = rt.redirs.get_file(path);
-                        write!(file, "{}", '\\')?;
-                    },
-                    None => write!(rt.output, "{}", '\\')?,
-                },
-                'a' => match &path {
-                    Some(path) => {
-                        let file = rt.redirs.get_file(path);
-                        write!(file, "{}", '\x07')?;
-                    },
-                    None => write!(rt.output, "{}", '\x07')?,
-                },
-                'b' => match &path {
-                    Some(path) => {
-                        let file = rt.redirs.get_file(path);
-                        write!(file, "{}", '\x08')?;
-                    },
-                    None => write!(rt.output, "{}", '\x08')?,
-                },
-                'f' => match &path {
-                    Some(path) => {
-                        let file = rt.redirs.get_file(path);
-                        write!(file, "{}", '\x0C')?;
-                    },
-                    None => write!(rt.output, "{}", '\x0C')?,
-                },
-                'n' => match &path {
-                    Some(path) => {
-                        let file = rt.redirs.get_file(path);
-                        write!(file, "{}", '\n')?;
-                    },
-                    None => write!(rt.output, "{}", '\n')?,
-                },
-                'r' => match &path {
-                    Some(path) => {
-                        let file = rt.redirs.get_file(path);
-                        write!(file, "{}", '\r')?;
-                    },
-                    None => write!(rt.output, "{}", '\r')?,
-                },
-                't' => match &path {
-                    Some(path) => {
-                        let file = rt.redirs.get_file(path);
-                        write!(file, "{}", '\t')?;
-                    },
-                    None => write!(rt.output, "{}", '\t')?,
-                },
-                'v' => match &path {
-                    Some(path) => {
-                        let file = rt.redirs.get_file(path);
-                        write!(file, "{}", '\x0B')?;
-                    },
-                    None => write!(rt.output, "{}", '\x0B')?,
-                },
-                _ => unimplemented!(),
-            },
-            _ => match &path {
-                Some(path) => {
-                    let file = rt.redirs.get_file(path);
-                    write!(file, "{}", c)?;
-                },
-                None => write!(rt.output, "{}", c)?,
-            },
-        }
+    let mut values = Vec::new();
+    while let Some(expr) = iter.next() {
+        values.push(expr.eval(rt)?);
     }
-    Ok(None)
+
+    match &path {
+        Some(path) => {
+            let file = rt.redirs.get_file(path);
+            convert_values(&format, format_iter, values.into_iter(), file)
+        },
+        None => convert_values(&format, format_iter, values.into_iter(), rt.output),
+    }
 }
 
 mod tests {
@@ -373,6 +374,21 @@ mod tests {
 
         let conv = Conversion::new(&mut ".42%".chars()).unwrap();
         assert_eq!(conv.specifier, ConversionSpecifier::Percent);
+    }
+
+    fn assert_conversions(data: &[(&str, Value, &str)]) {
+        for (i, (fmt, arg, expected)) in data.iter().enumerate() {
+            let mut out = Cursor::new(Vec::new());
+            let conv = Conversion::new(&mut fmt.chars()).unwrap();
+            conv.convert(&mut out, &arg).unwrap();
+            assert_eq!(
+                String::from_utf8(out.into_inner()).unwrap(),
+                *expected,
+                "failed on input[{}]: {:?}",
+                i,
+                conv
+            );
+        }
     }
 
     #[test]
@@ -402,18 +418,7 @@ mod tests {
             (" 5.1f",   Value::from(4.2),   "  4.2"),
             ("5.1f",    Value::from(4.2),   "  4.2"),
         ];
-        for (i, (fmt, arg, expected)) in data.iter().enumerate() {
-            let mut out = Cursor::new(Vec::new());
-            let conv = Conversion::new(&mut fmt.chars()).unwrap();
-            conv.convert(&mut out, &arg).unwrap();
-            assert_eq!(
-                String::from_utf8(out.into_inner()).unwrap(),
-                *expected,
-                "failed on input[{}]: {:?}",
-                i,
-                conv
-            );
-        }
+        assert_conversions(&data);
     }
 
     #[test]
@@ -428,17 +433,33 @@ mod tests {
             (".0s",    Value::from("123456789"),  ""),
             ("2.0s",   Value::from("123456789"),  "  "),
         ];
-        for (i, (fmt, arg, expected)) in data.iter().enumerate() {
-            let mut out = Cursor::new(Vec::new());
-            let conv = Conversion::new(&mut fmt.chars()).unwrap();
-            conv.convert(&mut out, &arg).unwrap();
-            assert_eq!(
-                String::from_utf8(out.into_inner()).unwrap(),
-                *expected,
-                "failed on input[{}]: {:?}",
-                i,
-                conv
-            );
-        }
+        assert_conversions(&data);
+    }
+
+    #[test]
+    fn exponent_conversion() {
+        #[rustfmt::skip]
+        let data = [
+            ("e",       Value::from(0),                 "0.000000e+00"),
+            ("E",       Value::from(0),                 "0.000000E+00"),
+            ("e",       Value::from(4.2),               "4.200000e+00"),
+            ("e",       Value::from(4999.2),            "4.999200e+03"),
+            ("e",       Value::from(42),                "4.200000e+01"),
+            ("e",       Value::from(4),                 "4.000000e+00"),
+            (".2e",     Value::from(4),                 "4.00e+00"),
+            (".2e",     Value::from(4235),              "4.24e+03"),
+            (".0e",     Value::from(4235),              "4e+03"),
+            ("9.2e",    Value::from(4),                 " 4.00e+00"),
+            ("10.2e",   Value::from(-4235),             " -4.24e+03"),
+            ("010.2e",  Value::from(-4235),             "-04.24e+03"),
+            ("e",       Value::from(0.0000000000045),   "4.500000e-12"),
+            ("015e",    Value::from(0.0000000000045),   "0004.500000e-12"),
+            ("15e",     Value::from(0.0000000000045),   "   4.500000e-12"),
+            ("+15e",    Value::from(0.0000000000045),   "  +4.500000e-12"),
+            (" 15e",    Value::from(0.0000000000045),   "   4.500000e-12"),
+            (" 15e",    Value::from(-0.0000000000045),  "  -4.500000e-12"),
+            ("+.0e",    Value::from(0),                 "+0e+00"),
+        ];
+        assert_conversions(&data);
     }
 }
