@@ -1,6 +1,10 @@
 use assert_cmd::prelude::*;
-use std::{io::Write, process::Command};
-use tempfile::NamedTempFile;
+use std::{
+    fs::File,
+    io::{prelude::*, Write},
+    process::Command,
+};
+use tempfile::{NamedTempFile, TempPath};
 
 pub fn run_test(input: Option<&str>, script: &str, output: &str) {
     let mut cmd = Command::cargo_bin("falcon").unwrap();
@@ -18,4 +22,13 @@ pub fn run_test(input: Option<&str>, script: &str, output: &str) {
             cmd.assert().stdout(output.to_owned());
         },
     }
+}
+
+pub fn read_file(path: TempPath) -> String {
+    let mut contents = String::new();
+    File::open(path)
+        .unwrap()
+        .read_to_string(&mut contents)
+        .unwrap();
+    contents
 }

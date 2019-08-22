@@ -96,9 +96,89 @@ impl Conversion {
             ConversionSpecifier::Float => self.convert_float(output, value),
             ConversionSpecifier::ExponentialLower => self.convert_exponential(output, value, true),
             ConversionSpecifier::ExponentialUpper => self.convert_exponential(output, value, false),
+            ConversionSpecifier::ExponentialOrFloatLower => {
+                self.convert_exponential_or_float(output, value, true)
+            },
+            ConversionSpecifier::ExponentialOrFloatUpper => {
+                self.convert_exponential_or_float(output, value, false)
+            },
             ConversionSpecifier::String => self.convert_string(output, value),
             _ => unimplemented!("{:?}", self.specifier),
         }
+    }
+
+    fn convert_exponential_or_float<Output: Write>(
+        &self,
+        output: &mut Output,
+        value: &Value,
+        lower: bool,
+    ) -> Result<(), EvaluationError> {
+        let value = value.as_number();
+        let p = match self.precision {
+            Some(0) => 1,
+            Some(p) => p,
+            None => 6,
+        } as isize;
+        let (value_exp, exp) = Conversion::exponent(value);
+
+        let signum = value.signum();
+
+        let (value, exp_notation, precision) = if p > exp && exp >= -4 {
+            // decimal notation
+            (value, false, (p - 1 - exp) as i32)
+        } else {
+            // decimal exponent notation
+            (value_exp, true, (p - 1) as i32)
+        };
+
+        let value = value.abs();
+        let trunc = value.trunc().to_string();
+        // remove trailing zeros
+        let mut fract = (value.fract() * 10_f64.powi(precision)).round() as usize;
+        while fract != 0 && fract % 10 == 0 {
+            fract /= 10;
+        }
+        let fract = fract.to_string();
+
+        let padding = if exp_notation {
+            self.width.map(|width| {
+                width.saturating_sub(
+                    if signum.is_sign_negative() || self.signed || self.space { 1 } else { 0 }
+                    // 5 = mantissa + exponent
+                    + 5
+                    // 1 = '.'
+                    + if precision != 0 && fract != "0" { fract.len() + 1 } else { 0 },
+                )
+            })
+        } else {
+            self.width.map(|width| {
+                width.saturating_sub(
+                    if signum.is_sign_negative() || self.signed || self.space { 1 } else { 0 }
+                    + trunc.len()
+                    // 1 = '.'
+                    + if precision != 0 && fract != "0" { fract.len() + 1 } else { 0 },
+                )
+            })
+        }
+        .unwrap_or(0);
+
+        if padding != 0 && !self.leading_zeros {
+            write!(output, "{}", " ".repeat(padding))?;
+        }
+        self.sign(output, signum)?;
+        if padding != 0 && self.leading_zeros {
+            write!(output, "{}", "0".repeat(padding))?;
+        }
+
+        write!(output, "{}", trunc)?;
+        if fract != "0" {
+            write!(output, ".{}", fract)?;
+        }
+
+        if exp_notation {
+            write!(output, "{}{:+03}", if lower { 'e' } else { 'E' }, exp)?;
+        }
+        Ok(())
     }
 
     fn convert_exponential<Output: Write>(
@@ -124,54 +204,44 @@ impl Conversion {
         if padding != 0 && !self.leading_zeros {
             write!(output, "{}", " ".repeat(padding))?;
         }
-        if value.is_sign_positive() {
-            if self.signed {
-                write!(output, "+")?;
-            } else if self.space {
-                write!(output, " ")?;
-            }
-        } else {
-            write!(output, "-")?;
-        }
+        self.sign(output, value)?;
         if padding != 0 && self.leading_zeros {
             write!(output, "{}", "0".repeat(padding))?;
         }
 
         // exponent
+        let (value, exp) = Conversion::exponent(value);
+
+        // mantissa
+        write!(output, "{}", value.trunc().abs())?;
+
+        // fract
+        Conversion::fract(output, precision, value.fract())?;
+        write!(output, "{}{:+03}", if lower { 'e' } else { 'E' }, exp)?;
+
+        Ok(())
+    }
+
+    fn exponent(value: f64) -> (f64, isize) {
         let mut value = value.abs();
-        let exp = if value == 0_f64 {
-            0
+
+        if value == 0_f64 {
+            (0_f64, 0)
         } else if value >= 1_f64 {
             let mut exp = 0;
             while value > 10_f64 {
                 value = value / 10_f64;
                 exp += 1;
             }
-            exp
+            (value, exp)
         } else {
             let mut exp = 0;
             while value < 1_f64 {
                 value = value * 10_f64;
                 exp += 1;
             }
-            -exp
-        };
-
-        // mantissa
-        write!(output, "{}", value.trunc())?;
-
-        // fract
-        if precision != 0 {
-            let fract = (value.fract().abs() * 10_f64.powi(precision as i32)).round();
-            if fract == 0_f64 {
-                write!(output, ".{}", "0".repeat(precision))?;
-            } else {
-                write!(output, ".{}", fract)?;
-            }
+            (value, -exp)
         }
-        write!(output, "{}{:+03}", if lower { 'e' } else { 'E' }, exp)?;
-
-        Ok(())
     }
 
     fn convert_float<Output: Write>(
@@ -180,12 +250,14 @@ impl Conversion {
         value: &Value,
     ) -> Result<(), EvaluationError> {
         let value = value.as_number();
-        let trunc = value.trunc().abs().to_string();
+        let signum = value.signum();
+        let value = value.abs();
+        let trunc = value.trunc().to_string();
 
         let precision = self.precision.unwrap_or(6);
         let padding = if let Some(width) = self.width {
             width.saturating_sub(
-                if value.is_sign_negative() || self.signed || self.space { 1 } else { 0 }
+                if signum.is_sign_negative() || self.signed || self.space { 1 } else { 0 }
                 + trunc.len()
                 // 1 = '.'
                 + if precision != 0 { precision + 1 } else { 0 },
@@ -197,6 +269,16 @@ impl Conversion {
         if padding != 0 && !self.leading_zeros {
             write!(output, "{}", " ".repeat(padding))?;
         }
+        self.sign(output, signum)?;
+        if padding != 0 && self.leading_zeros {
+            write!(output, "{}", "0".repeat(padding))?;
+        }
+
+        write!(output, "{}", trunc)?;
+        Conversion::fract(output, precision, value.fract())
+    }
+
+    fn sign<Output: Write>(&self, output: &mut Output, value: f64) -> Result<(), EvaluationError> {
         if value.is_sign_positive() {
             if self.signed {
                 write!(output, "+")?;
@@ -206,13 +288,16 @@ impl Conversion {
         } else {
             write!(output, "-")?;
         }
-        if padding != 0 && self.leading_zeros {
-            write!(output, "{}", "0".repeat(padding))?;
-        }
+        Ok(())
+    }
 
-        write!(output, "{}", trunc)?;
+    fn fract<Output: Write>(
+        output: &mut Output,
+        precision: usize,
+        value: f64,
+    ) -> Result<(), EvaluationError> {
         if precision != 0 {
-            let fract = (value.fract().abs() * 10_f64.powi(precision as i32)).round();
+            let fract = (value * 10_f64.powi(precision as i32)).round();
             if fract == 0_f64 {
                 write!(output, ".{}", "0".repeat(precision))?;
             } else {
@@ -249,6 +334,8 @@ enum ConversionSpecifier {
     UnsignedHexadecimalUpper,
     ExponentialLower,
     ExponentialUpper,
+    ExponentialOrFloatLower,
+    ExponentialOrFloatUpper,
     Float,
     UnsignedChar,
     String,
@@ -269,9 +356,11 @@ impl ConversionSpecifier {
             'u' => Some(ConversionSpecifier::UnsignedDecimal),
             'x' => Some(ConversionSpecifier::UnsignedHexadecimalLower),
             'X' => Some(ConversionSpecifier::UnsignedHexadecimalUpper),
-            'f' | 'F' | 'g' | 'G' => Some(ConversionSpecifier::Float),
+            'f' | 'F' => Some(ConversionSpecifier::Float),
             'e' => Some(ConversionSpecifier::ExponentialLower),
             'E' => Some(ConversionSpecifier::ExponentialUpper),
+            'g' => Some(ConversionSpecifier::ExponentialOrFloatLower),
+            'G' => Some(ConversionSpecifier::ExponentialOrFloatUpper),
             'c' => Some(ConversionSpecifier::UnsignedChar),
             's' => Some(ConversionSpecifier::String),
             '%' => Some(ConversionSpecifier::Percent),
@@ -352,6 +441,7 @@ where
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Cursor;
@@ -449,6 +539,7 @@ mod tests {
             (".2e",     Value::from(4),                 "4.00e+00"),
             (".2e",     Value::from(4235),              "4.24e+03"),
             (".0e",     Value::from(4235),              "4e+03"),
+            ("10.0e",   Value::from(4235),              "     4e+03"),
             ("9.2e",    Value::from(4),                 " 4.00e+00"),
             ("10.2e",   Value::from(-4235),             " -4.24e+03"),
             ("010.2e",  Value::from(-4235),             "-04.24e+03"),
@@ -459,6 +550,56 @@ mod tests {
             (" 15e",    Value::from(0.0000000000045),   "   4.500000e-12"),
             (" 15e",    Value::from(-0.0000000000045),  "  -4.500000e-12"),
             ("+.0e",    Value::from(0),                 "+0e+00"),
+        ];
+        assert_conversions(&data);
+    }
+
+    #[test]
+    fn exponent_or_float_conversion() {
+        #[rustfmt::skip]
+        let data = [
+            (".2g",     Value::from(4.2),               "4.2"),
+            (".2g",     Value::from(-4.2),              "-4.2"),
+            (".0g",     Value::from(4.2),               "4"),
+            (".2g",     Value::from(42.2),              "42"),
+            (".2g",     Value::from(10),                "10"),
+            ("g",       Value::from(4.2),               "4.2"),
+            ("+.2g",    Value::from(4.2),               "+4.2"),
+            ("+.2g",    Value::from(-4.2),              "-4.2"),
+            (" .2g",    Value::from(-4.2),              "-4.2"),
+            (" .2g",    Value::from(4.2),               " 4.2"),
+            ("0g",      Value::from(4.2),               "4.2"),
+            ("010.2g",  Value::from(4.2),               "00000004.2"),
+            ("010.0g",  Value::from(4.2),               "0000000004"),
+            ("02.0g",   Value::from(4.2),               "04"),
+            (" 04.1g",  Value::from(4.2),               " 004"),
+            ("05.1g",   Value::from(4.2),               "00004"),
+            (" 05.1g",  Value::from(4.2),               " 0004"),
+            (" 05.1g",  Value::from(-4.2),              "-0004"),
+            ("+05.1g",  Value::from(4.2),               "+0004"),
+            ("+5.1g",   Value::from(4.2),               "   +4"),
+            (" 5.1g",   Value::from(4.2),               "    4"),
+            ("5.1g",    Value::from(4.2),               "    4"),
+            ("g",       Value::from(0),                 "0"),
+            ("G",       Value::from(0),                 "0"),
+            ("g",       Value::from(4.2),               "4.2"),
+            ("g",       Value::from(4999.2),            "4999.2"),
+            ("g",       Value::from(42),                "42"),
+            ("g",       Value::from(4),                 "4"),
+            (".2g",     Value::from(4),                 "4"),
+            (".2g",     Value::from(4235),              "4.2e+03"),
+            (".0g",     Value::from(4235),              "4e+03"),
+            ("10.0g",   Value::from(-4235),             "    -4e+03"),
+            ("9.2g",    Value::from(4),                 "        4"),
+            ("10.2g",   Value::from(-4235),             "  -4.2e+03"),
+            ("010.2g",  Value::from(-4235),             "-004.2e+03"),
+            ("g",       Value::from(0.0000000000045),   "4.5e-12"),
+            ("015g",    Value::from(0.0000000000045),   "000000004.5e-12"),
+            ("15g",     Value::from(0.0000000000045),   "        4.5e-12"),
+            ("+15g",    Value::from(0.0000000000045),   "       +4.5e-12"),
+            (" 15g",    Value::from(0.0000000000045),   "        4.5e-12"),
+            (" 15g",    Value::from(-0.0000000000045),  "       -4.5e-12"),
+            ("+.0g",    Value::from(0),                 "+0"),
         ];
         assert_conversions(&data);
     }

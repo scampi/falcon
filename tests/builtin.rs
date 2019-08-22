@@ -1,8 +1,7 @@
 /// taken from https://github.com/andychu/bwk/blob/41fdc2c8a3aa26c9c6ec3c797b85283d406b7f62/tests/T.builtin
 mod common;
 
-use common::run_test;
-use std::{fs::File, io::prelude::*};
+use common::{read_file, run_test};
 use tempfile::NamedTempFile;
 
 #[test]
@@ -36,10 +35,8 @@ fn toupper_tolower() {
 
 #[test]
 fn rand() {
-    let mut file1 = NamedTempFile::new().unwrap();
-    let path1 = file1.into_temp_path();
-    let mut file2 = NamedTempFile::new().unwrap();
-    let path2 = file2.into_temp_path();
+    let path1 = NamedTempFile::new().unwrap().into_temp_path();
+    let path2 = NamedTempFile::new().unwrap().into_temp_path();
 
     let script = r#"
         BEGIN {
@@ -56,15 +53,7 @@ fn rand() {
 
     run_test(None, &script, "");
 
-    let mut contents1 = String::new();
-    File::open(path1)
-        .unwrap()
-        .read_to_string(&mut contents1)
-        .unwrap();
-    let mut contents2 = String::new();
-    File::open(path2)
-        .unwrap()
-        .read_to_string(&mut contents2)
-        .unwrap();
+    let contents1 = read_file(path1);
+    let contents2 = read_file(path2);
     assert_eq!(contents1, contents2);
 }

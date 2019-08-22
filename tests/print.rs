@@ -1,6 +1,6 @@
 mod common;
 
-use common::run_test;
+use common::{read_file, run_test};
 use std::{fs::File, io::prelude::*};
 use tempfile::NamedTempFile;
 
@@ -32,10 +32,6 @@ fn append_redirection() {
 
     run_test(Some("toto\ntata\n"), &script, "");
 
-    let mut contents = String::new();
-    File::open(path)
-        .unwrap()
-        .read_to_string(&mut contents)
-        .unwrap();
+    let contents = read_file(path);
     assert_eq!(contents, "john connor\nscript: toto\nscript: tata\n");
 }

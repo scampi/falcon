@@ -7,7 +7,7 @@ use crate::{
     },
     parser::ast::{ExprList, OutputRedirection},
 };
-use std::io::Write;
+use std::{io::Write, iter::once};
 
 pub fn execute<Output>(
     rt: &mut RuntimeMut<'_, Output>,
@@ -46,7 +46,7 @@ where
                 Some(path) => {
                     let mut file = rt.redirs.get_file(path);
                     if let Value::Number(_) = val {
-                        convert_values(&ofmt, ofmt.chars(), Some(val).into_iter(), &mut file)?;
+                        convert_values(&ofmt, ofmt.chars(), once(val), &mut file)?;
                         write!(file, "{}", sep)?;
                     } else {
                         write!(file, "{}{}", val.as_string(), sep)?;
@@ -54,7 +54,7 @@ where
                 },
                 None => {
                     if let Value::Number(_) = val {
-                        convert_values(&ofmt, ofmt.chars(), Some(val).into_iter(), &mut rt.output)?;
+                        convert_values(&ofmt, ofmt.chars(), once(val), &mut rt.output)?;
                         write!(rt.output, "{}", sep)?;
                     } else {
                         write!(rt.output, "{}{}", val.as_string(), sep)?;

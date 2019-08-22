@@ -43,7 +43,8 @@ fn substr(string: &str, offset: usize, len: usize) -> String {
     }
 }
 
-mod test {
+#[cfg(test)]
+mod tests {
     use super::substr;
 
     #[test]
