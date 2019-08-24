@@ -1,6 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{rnd::Rnd, value::Value, RuntimeMut},
+    interpreter::{rnd::Rnd, stmt::printf::sprintf, value::Value, RuntimeMut},
     parser::ast::ExprList,
 };
 use std::io::Write;
@@ -18,6 +18,7 @@ pub fn is_builtin(name: &str) -> bool {
         "tolower" => true,
         "rand" => true,
         "srand" => true,
+        "sprintf" => true,
         _ => false,
     }
 }
@@ -45,6 +46,7 @@ where
             let seed = Rnd::srand_arg(args, rt)?;
             rt.rnd.srand(seed)
         },
+        "sprintf" => sprintf(args, rt),
         _ => unreachable!(),
     }
 }

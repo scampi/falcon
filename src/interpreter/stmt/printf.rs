@@ -7,7 +7,10 @@ use crate::{
     },
     parser::ast::{ExprList, OutputRedirection},
 };
-use std::io::Write;
+use std::{
+    cmp::max,
+    io::{Cursor, Write},
+};
 
 #[derive(Debug, Default)]
 struct Conversion {
@@ -103,8 +106,62 @@ impl Conversion {
                 self.convert_exponential_or_float(output, value, false)
             },
             ConversionSpecifier::String => self.convert_string(output, value),
+            ConversionSpecifier::SignedDecimal => self.convert_signed_decimal(output, value),
             _ => unimplemented!("{:?}", self.specifier),
         }
+    }
+
+    fn convert_signed_decimal<Output: Write>(
+        &self,
+        output: &mut Output,
+        value: &Value,
+    ) -> Result<(), EvaluationError> {
+        let precision = self.precision.unwrap_or(1);
+        let value = value.as_number().trunc();
+
+        if value == 0_f64 && precision == 0 {
+            if let Some(width) = self.width {
+                write!(output, "{}", " ".repeat(width))?;
+            }
+            return Ok(());
+        }
+
+        let value_str = value.abs().to_string();
+        let padding = |width: usize| {
+            width.saturating_sub(
+                if value.is_sign_negative() || self.signed || self.space {
+                    1
+                } else {
+                    0
+                } + max(precision, value_str.len()),
+            )
+        };
+        let (spaces, zeros) = match (self.width, self.precision) {
+            (Some(width), Some(precision)) => {
+                (padding(width), precision.saturating_sub(value_str.len()))
+            },
+            (Some(width), None) => {
+                if self.leading_zeros {
+                    (0, padding(width))
+                } else {
+                    (padding(width), 0)
+                }
+            },
+            (None, Some(precision)) => (0, precision.saturating_sub(value_str.len())),
+            (None, None) => (0, 0),
+        };
+
+        if spaces != 0 {
+            write!(output, "{}", " ".repeat(spaces))?;
+        }
+        self.sign(output, value)?;
+        if zeros != 0 {
+            write!(output, "{}", "0".repeat(zeros))?;
+        }
+
+        write!(output, "{}", value.abs())?;
+
+        Ok(())
     }
 
     fn convert_exponential_or_float<Output: Write>(
@@ -407,6 +464,34 @@ pub fn convert_values<
     Ok(None)
 }
 
+pub fn sprintf<Output: Write>(
+    args: &ExprList,
+    rt: &mut RuntimeMut<'_, Output>,
+) -> Result<Value, EvaluationError> {
+    if args.len() == 0 {
+        return Err(EvaluationError::InvalidNumberOfArguments(
+            String::from("sprintf"),
+            1,
+            args.len(),
+        ));
+    }
+
+    let mut iter = args.0.iter();
+    let format = iter.next().unwrap().eval(rt)?.as_string();
+    let format_iter = format.chars();
+
+    let mut values = Vec::new();
+    while let Some(expr) = iter.next() {
+        values.push(expr.eval(rt)?);
+    }
+
+    let mut out = Cursor::new(Vec::new());
+    convert_values(&format, format_iter, values.into_iter(), &mut out)?;
+
+    let result = std::str::from_utf8(out.get_ref())?;
+    Ok(Value::from(result))
+}
+
 pub fn execute<Output>(
     rt: &mut RuntimeMut<'_, Output>,
     exprs: &ExprList,
@@ -600,6 +685,35 @@ mod tests {
             (" 15g",    Value::from(0.0000000000045),   "        4.5e-12"),
             (" 15g",    Value::from(-0.0000000000045),  "       -4.5e-12"),
             ("+.0g",    Value::from(0),                 "+0"),
+        ];
+        assert_conversions(&data);
+    }
+
+    #[test]
+    fn signed_decimal_conversion() {
+        #[rustfmt::skip]
+        let data = [
+            ("d",      Value::from(0.0),  "0"),
+            (".0d",    Value::from(0.0),  ""),
+            (".0d",    Value::from(4),    "4"),
+            ("d",      Value::from(4.2),  "4"),
+            ("5d",     Value::from(4),    "    4"),
+            ("5d",     Value::from(-4),   "   -4"),
+            ("5.0d",   Value::from(0),    "     "),
+            ("05d",    Value::from(4),    "00004"),
+            ("05d",    Value::from(-4),   "-0004"),
+            ("05.0d",  Value::from(4),    "    4"),
+            ("05.0d",  Value::from(-4),   "   -4"),
+            ("05.1d",  Value::from(4),    "    4"),
+            ("05.2d",  Value::from(4),    "   04"),
+            (" d",     Value::from(4),    " 4"),
+            (" d",     Value::from(-4),   "-4"),
+            ("+d",     Value::from(4),    "+4"),
+            ("+d",     Value::from(-4),   "-4"),
+            (".2d",    Value::from(4),    "04"),
+            (".2d",    Value::from(-4),   "-04"),
+            ("5.2d",   Value::from(4),    "   04"),
+            ("5.2d",   Value::from(-4),   "  -04"),
         ];
         assert_conversions(&data);
     }

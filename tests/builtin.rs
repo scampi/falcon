@@ -57,3 +57,15 @@ fn rand() {
     let contents2 = read_file(path2);
     assert_eq!(contents1, contents2);
 }
+
+#[test]
+fn printf_arg_list_not_evaluated() {
+    let script = r#"
+        BEGIN {
+            j = 1; sprintf("%d", 99, ++j)	# does j get incremented?
+            if (j != 2)
+                    print "BAD: T.builtin (printf arg list not evaluated)"
+        }
+        "#;
+    run_test(None, &script, "");
+}

@@ -6,7 +6,7 @@ use crate::{
 use std::io::Write;
 
 mod print;
-mod printf;
+pub mod printf;
 pub mod redirections;
 
 #[derive(Debug)]

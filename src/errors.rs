@@ -27,6 +27,8 @@ pub enum EvaluationError {
     UseScalarAsArray,
     #[fail(display = "{}: {}", _0, _1)]
     IoError(String, std::io::Error),
+    #[fail(display = "{}", _0)]
+    Utf8Error(std::str::Utf8Error),
 }
 
 #[derive(Debug, Fail)]
@@ -51,6 +53,12 @@ pub enum ParseError {
 impl From<std::io::Error> for EvaluationError {
     fn from(e: std::io::Error) -> EvaluationError {
         EvaluationError::IoError(String::from("IO error"), e)
+    }
+}
+
+impl From<std::str::Utf8Error> for EvaluationError {
+    fn from(e: std::str::Utf8Error) -> EvaluationError {
+        EvaluationError::Utf8Error(e)
     }
 }
 
