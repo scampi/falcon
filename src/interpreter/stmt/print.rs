@@ -33,8 +33,6 @@ where
             None => write!(rt.output, "{}", rt.record.get(0)?.as_string())?,
         }
     } else {
-        let ofmt = rt.vars.get("OFMT", None)?.as_string();
-
         for (i, expr) in exprs.0.iter().enumerate() {
             let val = expr.eval(rt)?;
             let sep = if i + 1 == exprs.len() {
@@ -46,7 +44,7 @@ where
                 Some(path) => {
                     let mut file = rt.redirs.get_file(path);
                     if let Value::Number(_) = val {
-                        convert_values(&ofmt, ofmt.chars(), once(val), &mut file)?;
+                        convert_values(&rt.vars.ofmt, rt.vars.ofmt.chars(), once(val), &mut file)?;
                         write!(file, "{}", sep)?;
                     } else {
                         write!(file, "{}{}", val.as_string(), sep)?;
@@ -54,7 +52,12 @@ where
                 },
                 None => {
                     if let Value::Number(_) = val {
-                        convert_values(&ofmt, ofmt.chars(), once(val), &mut rt.output)?;
+                        convert_values(
+                            &rt.vars.ofmt,
+                            rt.vars.ofmt.chars(),
+                            once(val),
+                            &mut rt.output,
+                        )?;
                         write!(rt.output, "{}", sep)?;
                     } else {
                         write!(rt.output, "{}{}", val.as_string(), sep)?;

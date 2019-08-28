@@ -19,6 +19,7 @@ pub fn is_builtin(name: &str) -> bool {
         "rand" => true,
         "srand" => true,
         "sprintf" => true,
+        "sub" => true,
         _ => false,
     }
 }
@@ -47,6 +48,7 @@ where
             rt.rnd.srand(seed)
         },
         "sprintf" => sprintf(args, rt),
+        "sub" => substitute::sub(args, rt),
         _ => unreachable!(),
     }
 }
@@ -59,6 +61,7 @@ mod log;
 mod sin;
 // String functions
 mod index;
+mod substitute;
 mod substr;
 mod tolower;
 mod toupper;

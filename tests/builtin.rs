@@ -69,3 +69,67 @@ fn printf_arg_list_not_evaluated() {
         "#;
     run_test(None, &script, "");
 }
+
+#[test]
+fn substr_arg_list_not_evaluated() {
+    let script = r#"
+        BEGIN {
+            j = 1; substr("", 1, ++j)	# does j get incremented?
+            if (j != 2)
+                    print "BAD: T.builtin (substr arg list not evaluated)"
+        }
+        "#;
+    run_test(None, &script, "");
+}
+
+#[test]
+fn sub_arg_list_not_evaluated() {
+    let script = r#"
+        BEGIN {
+            j = 1; sub(/1/, ++j, z)	# does j get incremented?
+            if (j != 2)
+                    print "BAD: T.builtin (sub() arg list not evaluated)"
+        }
+        "#;
+    run_test(None, &script, "");
+}
+
+#[test]
+fn sub() {
+    let input = "aa\nnope\nba";
+    let output = "ba 1\nnope 0\nbb 1\n";
+    let script = r#"{ n = sub(/a/, "b"); print $0, n }"#;
+    run_test(Some(input), &script, output);
+
+    let input = "a1a";
+    let output = "aba 1\n";
+    let script = r#"{ n = sub(1, "b"); print $0, n }"#;
+    run_test(Some(input), &script, output);
+
+    let output = "ba 1\n";
+    let script = r#"BEGIN { s = "aa"; n = sub("a", "b", s); print s, n }"#;
+    run_test(None, &script, output);
+
+    let input = "aa aa aa";
+    let output = "aa ba aa ba 1\n";
+    let script = r#"{ n = sub("a", "b", $2); print $0, $2, n }"#;
+    run_test(Some(input), &script, output);
+
+    let output = "ba 1\n";
+    let script = r#"BEGIN { arr[0] = "aa"; n = sub("a", "b", arr[0]); print arr[0], n }"#;
+    run_test(None, &script, output);
+
+    let input = "nope\nhello john1!";
+    let output = "nope 0\nhello connor, john1! 1\n";
+    let script = r#"{ n = sub(/john[0-9]/, "connor, &"); print $0, n }"#;
+    run_test(Some(input), &script, output);
+
+    let output = "hello connor, &! 1\n";
+    let script =
+        r#"BEGIN { s = "hello john1!"; n = sub(/john[0-9]/, "connor, \\&", s); print s, n }"#;
+    run_test(None, &script, output);
+
+    let output = "hello john1 & john1! 1\n";
+    let script = r#"BEGIN { s = "hello john1!"; n = sub(/john[0-9]/, "& \\& &", s); print s, n }"#;
+    run_test(None, &script, output);
+}
