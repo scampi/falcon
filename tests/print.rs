@@ -35,3 +35,12 @@ fn append_redirection() {
     let contents = read_file(path);
     assert_eq!(contents, "john connor\nscript: toto\nscript: tata\n");
 }
+
+#[test]
+fn escaped_characters() {
+    let script = r#"{ print "hello\t%s", $0 }"#;
+    run_test(Some("john"), &script, "hello\t%s john\n");
+
+    let script = "{ print }";
+    run_test(Some("toto\ttata"), &script, "toto\ttata\n");
+}

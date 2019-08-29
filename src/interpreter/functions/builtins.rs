@@ -1,6 +1,6 @@
 use crate::{
     errors::EvaluationError,
-    interpreter::{rnd::Rnd, stmt::printf::sprintf, value::Value, RuntimeMut},
+    interpreter::{rnd::Rnd, stmt::formatting::sprintf, value::Value, RuntimeMut},
     parser::ast::ExprList,
 };
 use std::io::Write;

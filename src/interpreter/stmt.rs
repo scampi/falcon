@@ -5,8 +5,7 @@ use crate::{
 };
 use std::io::Write;
 
-mod print;
-pub mod printf;
+pub mod formatting;
 pub mod redirections;
 
 #[derive(Debug)]
@@ -27,8 +26,8 @@ impl Eval for Stmt {
         Output: Write,
     {
         match self {
-            Stmt::Print(exprs, redir) => print::execute(rt, exprs, redir),
-            Stmt::Printf(exprs, redir) => printf::execute(rt, exprs, redir),
+            Stmt::Print(exprs, redir) => formatting::print(rt, exprs, redir),
+            Stmt::Printf(exprs, redir) => formatting::printf(rt, exprs, redir),
             Stmt::ForIn(var, array, body) => {
                 for key in rt.vars.array_keys(array)? {
                     rt.vars

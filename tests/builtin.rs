@@ -132,4 +132,8 @@ fn sub() {
     let output = "hello john1 & john1! 1\n";
     let script = r#"BEGIN { s = "hello john1!"; n = sub(/john[0-9]/, "& \\& &", s); print s, n }"#;
     run_test(None, &script, output);
+
+    let output = "helli%s\t! 1\n";
+    let script = r#"BEGIN { s = "hello!"; n = sub("o", "i%s\t", s); print s, n }"#;
+    run_test(None, &script, output);
 }
