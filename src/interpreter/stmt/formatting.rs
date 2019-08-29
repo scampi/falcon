@@ -527,6 +527,30 @@ where
     }
 }
 
+fn print_escaped_characters<Output: Write>(
+    output: &mut Output,
+    value: String,
+) -> Result<(), EvaluationError> {
+    let mut iter = value.chars();
+    while let Some(c) = iter.next() {
+        match c {
+            '\\' => match iter.next().unwrap() {
+                '\\' => write!(output, "{}", '\\')?,
+                'a' => write!(output, "{}", '\x07')?,
+                'b' => write!(output, "{}", '\x08')?,
+                'f' => write!(output, "{}", '\x0C')?,
+                'n' => write!(output, "{}", '\n')?,
+                'r' => write!(output, "{}", '\r')?,
+                't' => write!(output, "{}", '\t')?,
+                'v' => write!(output, "{}", '\x0B')?,
+                _ => unimplemented!(),
+            },
+            _ => write!(output, "{}", c)?,
+        }
+    }
+    Ok(())
+}
+
 pub fn print<Output>(
     rt: &mut RuntimeMut<'_, Output>,
     exprs: &ExprList,
@@ -546,9 +570,9 @@ where
         match &path {
             Some(path) => {
                 let file = rt.redirs.get_file(path);
-                write!(file, "{}", rt.record.get(0)?.as_string())?;
+                print_escaped_characters(file, rt.record.get(0)?.as_string())?;
             },
-            None => write!(rt.output, "{}", rt.record.get(0)?.as_string())?,
+            None => print_escaped_characters(rt.output, rt.record.get(0)?.as_string())?,
         }
     } else {
         for (i, expr) in exprs.0.iter().enumerate() {
@@ -565,7 +589,8 @@ where
                         convert_values(&rt.vars.ofmt, rt.vars.ofmt.chars(), once(val), &mut file)?;
                         write!(file, "{}", sep)?;
                     } else {
-                        write!(file, "{}{}", val.as_string(), sep)?;
+                        print_escaped_characters(file, val.as_string())?;
+                        write!(file, "{}", sep)?;
                     }
                 },
                 None => {
@@ -578,7 +603,8 @@ where
                         )?;
                         write!(rt.output, "{}", sep)?;
                     } else {
-                        write!(rt.output, "{}{}", val.as_string(), sep)?;
+                        print_escaped_characters(rt.output, val.as_string())?;
+                        write!(rt.output, "{}", sep)?;
                     }
                 },
             }
