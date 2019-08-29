@@ -32,7 +32,7 @@ impl Eval for Stmt {
             Stmt::ForIn(var, array, body) => {
                 for key in rt.vars.array_keys(array)? {
                     rt.vars
-                        .set(&AssignType::Normal, &var, None, Value::from(key.to_owned()))?;
+                        .set(AssignType::Normal, &var, None, Value::from(key.to_owned()))?;
                     if let Some(res) = body.eval(rt)? {
                         match res {
                             StmtResult::Break => break,

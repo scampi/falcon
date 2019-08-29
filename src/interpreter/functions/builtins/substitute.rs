@@ -63,7 +63,7 @@ pub fn sub<Output: Write>(
                 return Ok(Value::from(0));
             }
             rt.record
-                .set(rt.vars, &AssignType::Normal, 0, Value::from(line))?;
+                .set(rt.vars, AssignType::Normal, 0, Value::from(line))?;
             Ok(Value::from(1))
         },
         [ere, repl, input] => {
@@ -76,12 +76,12 @@ pub fn sub<Output: Write>(
             match input {
                 Expr::LValue(LValueType::Name(name)) => {
                     rt.vars
-                        .set(&AssignType::Normal, name, None, Value::from(input_str))?;
+                        .set(AssignType::Normal, name, None, Value::from(input_str))?;
                 },
                 Expr::LValue(LValueType::Dollar(expr)) => {
                     let offset = expr.eval(rt)?.as_number() as isize;
                     rt.record
-                        .set(rt.vars, &AssignType::Normal, offset, Value::from(input_str))?;
+                        .set(rt.vars, AssignType::Normal, offset, Value::from(input_str))?;
                 },
                 Expr::LValue(LValueType::Brackets(name, exprs)) => {
                     let subscript = exprs.eval(rt)?;
@@ -92,7 +92,7 @@ pub fn sub<Output: Write>(
                         .as_slice()
                         .join(&rt.vars.subsep);
                     rt.vars.set(
-                        &AssignType::Normal,
+                        AssignType::Normal,
                         name,
                         Some(&subscript),
                         Value::from(input_str),

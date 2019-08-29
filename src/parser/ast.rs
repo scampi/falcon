@@ -317,7 +317,7 @@ impl fmt::Display for LValueType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum AssignType {
     Normal,
     Pow,

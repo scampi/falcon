@@ -60,7 +60,7 @@ impl Record {
     pub fn set(
         &mut self,
         vars: &mut Variables,
-        ty: &AssignType,
+        ty: AssignType,
         index: isize,
         value: Value,
     ) -> Result<Value, EvaluationError> {

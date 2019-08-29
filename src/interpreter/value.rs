@@ -134,7 +134,7 @@ impl Value {
         Value::Bool(res)
     }
 
-    pub fn compute(op: &AssignType, a: Value, b: Value) -> Result<Value, EvaluationError> {
+    pub fn compute(op: AssignType, a: Value, b: Value) -> Result<Value, EvaluationError> {
         match op {
             AssignType::Pow => Ok(Value::from(a.as_number().powf(b.as_number()))),
             AssignType::Mod => Ok(Value::from(a.as_number() % b.as_number())),

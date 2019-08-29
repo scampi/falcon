@@ -207,7 +207,7 @@ impl Variables {
 
     pub fn set(
         &mut self,
-        ty: &AssignType,
+        ty: AssignType,
         name: &str,
         subscript: Option<&str>,
         new_value: Value,
@@ -268,7 +268,7 @@ impl Variables {
 
     fn set_local_var(
         &mut self,
-        ty: &AssignType,
+        ty: AssignType,
         name: &str,
         subscript: Option<&str>,
         new_value: &Value,
@@ -297,7 +297,7 @@ impl Variables {
 
     fn set_var(
         vars: &mut HashMap<String, Value>,
-        ty: &AssignType,
+        ty: AssignType,
         name: &str,
         subscript: Option<&str>,
         new_value: Value,

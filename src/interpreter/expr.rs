@@ -94,82 +94,82 @@ impl Eval for Expr {
             Expr::Assign(ty, lvalue, rvalue) => {
                 let new_value = rvalue.eval(rt)?;
                 match lvalue {
-                    LValueType::Name(name) => rt.vars.set(ty, name, None, new_value),
+                    LValueType::Name(name) => rt.vars.set(*ty, name, None, new_value),
                     LValueType::Dollar(e) => {
                         let index = e.eval(rt)?.as_number() as isize;
-                        rt.record.set(&mut rt.vars, ty, index, new_value)
+                        rt.record.set(&mut rt.vars, *ty, index, new_value)
                     },
                     LValueType::Brackets(name, key) => {
                         let key_str = Variables::array_key(key.eval(rt)?)?;
-                        rt.vars.set(ty, name, Some(&key_str), new_value)
+                        rt.vars.set(*ty, name, Some(&key_str), new_value)
                     },
                 }
             },
             Expr::PreIncrement(lvalue) => match lvalue {
-                LValueType::Name(name) => rt.vars.set(&AssignType::Add, name, None, Value::from(1)),
+                LValueType::Name(name) => rt.vars.set(AssignType::Add, name, None, Value::from(1)),
                 LValueType::Dollar(e) => {
                     let index = e.eval(rt)?.as_number() as isize;
                     rt.record
-                        .set(&mut rt.vars, &AssignType::Add, index, Value::from(1))
+                        .set(&mut rt.vars, AssignType::Add, index, Value::from(1))
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Variables::array_key(key.eval(rt)?)?;
                     rt.vars
-                        .set(&AssignType::Add, name, Some(&key_str), Value::from(1))
+                        .set(AssignType::Add, name, Some(&key_str), Value::from(1))
                 },
             },
             Expr::PreDecrement(lvalue) => match lvalue {
-                LValueType::Name(name) => rt.vars.set(&AssignType::Sub, name, None, Value::from(1)),
+                LValueType::Name(name) => rt.vars.set(AssignType::Sub, name, None, Value::from(1)),
                 LValueType::Dollar(e) => {
                     let index = e.eval(rt)?.as_number() as isize;
                     rt.record
-                        .set(&mut rt.vars, &AssignType::Sub, index, Value::from(1))
+                        .set(&mut rt.vars, AssignType::Sub, index, Value::from(1))
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Variables::array_key(key.eval(rt)?)?;
                     rt.vars
-                        .set(&AssignType::Sub, name, Some(&key_str), Value::from(1))
+                        .set(AssignType::Sub, name, Some(&key_str), Value::from(1))
                 },
             },
             Expr::PostIncrement(lvalue) => match lvalue {
                 LValueType::Name(name) => {
                     let value = rt.vars.get(name, None);
-                    rt.vars.set(&AssignType::Add, name, None, Value::from(1))?;
+                    rt.vars.set(AssignType::Add, name, None, Value::from(1))?;
                     value
                 },
                 LValueType::Dollar(e) => {
                     let index = e.eval(rt)?.as_number() as isize;
                     let value = rt.record.get(index);
                     rt.record
-                        .set(&mut rt.vars, &AssignType::Add, index, Value::from(1))?;
+                        .set(&mut rt.vars, AssignType::Add, index, Value::from(1))?;
                     value
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Variables::array_key(key.eval(rt)?)?;
                     let value = rt.vars.get(name, Some(&key_str));
                     rt.vars
-                        .set(&AssignType::Add, name, Some(&key_str), Value::from(1))?;
+                        .set(AssignType::Add, name, Some(&key_str), Value::from(1))?;
                     value
                 },
             },
             Expr::PostDecrement(lvalue) => match lvalue {
                 LValueType::Name(name) => {
                     let value = rt.vars.get(name, None);
-                    rt.vars.set(&AssignType::Sub, name, None, Value::from(1))?;
+                    rt.vars.set(AssignType::Sub, name, None, Value::from(1))?;
                     value
                 },
                 LValueType::Dollar(e) => {
                     let index = e.eval(rt)?.as_number() as isize;
                     let value = rt.record.get(index);
                     rt.record
-                        .set(&mut rt.vars, &AssignType::Sub, index, Value::from(1))?;
+                        .set(&mut rt.vars, AssignType::Sub, index, Value::from(1))?;
                     value
                 },
                 LValueType::Brackets(name, key) => {
                     let key_str = Variables::array_key(key.eval(rt)?)?;
                     let value = rt.vars.get(name, Some(&key_str));
                     rt.vars
-                        .set(&AssignType::Sub, name, Some(&key_str), Value::from(1))?;
+                        .set(AssignType::Sub, name, Some(&key_str), Value::from(1))?;
                     value
                 },
             },
