@@ -1,6 +1,6 @@
 mod common;
 
-use common::{read_file, run_test};
+use common::{read_file, run_test, Test};
 use std::{fs::File, io::prelude::*};
 use tempfile::NamedTempFile;
 
@@ -12,7 +12,7 @@ fn truncate_redirection() {
     let script = r#"{ printf "script: %s\n", $0 > "file" }"#;
     let script = script.replace("file", &path.to_string_lossy());
 
-    run_test(Some("toto\ntata\n"), &script, "");
+    run_test(Test::new(&script).input("toto\ntata\n"));
 
     let mut contents = String::new();
     File::open(path)
@@ -30,7 +30,7 @@ fn append_redirection() {
     let script = r#"{ printf "script: %s\n", $0 >> "file" }"#;
     let script = script.replace("file", &path.to_string_lossy());
 
-    run_test(Some("toto\ntata\n"), &script, "");
+    run_test(Test::new(&script).input("toto\ntata\n"));
 
     let contents = read_file(path);
     assert_eq!(contents, "john connor\nscript: toto\nscript: tata\n");
@@ -39,8 +39,12 @@ fn append_redirection() {
 #[test]
 fn escaped_characters() {
     let script = r#"{ print "hello\t%s", $0 }"#;
-    run_test(Some("john"), &script, "hello\t%s john\n");
+    run_test(Test::new(&script).input("john").stdout("hello\t%s john\n"));
 
     let script = "{ print }";
-    run_test(Some("toto\ttata"), &script, "toto\ttata\n");
+    run_test(
+        Test::new(&script)
+            .input("toto\ttata")
+            .stdout("toto\ttata\n"),
+    );
 }

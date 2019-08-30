@@ -1,35 +1,36 @@
 /// taken from https://github.com/andychu/bwk/blob/41fdc2c8a3aa26c9c6ec3c797b85283d406b7f62/tests/T.builtin
 mod common;
 
-use common::{read_file, run_test};
+use common::{read_file, run_test, Test};
 use tempfile::NamedTempFile;
 
 #[test]
 fn index_substr() {
-    run_test(None, "BEGIN { print index(123, substr(123, 2)) }", "2\n")
+    run_test(Test::new("BEGIN { print index(123, substr(123, 2)) }").stdout("2\n"))
 }
 
 #[test]
 fn sin_cos() {
     run_test(
-        None,
-        r#"
+        Test::new(
+            r#"
         BEGIN {
           pi = 2 * atan2(1, 0)
           printf("%.5f %.3f %.3f %.5f %.3f\n",
                   pi, sin(pi), cos(pi/2), exp(log(pi)), log(exp(10)))
         }
         "#,
-        "3.14159 0.000 0.000 3.14159 10.000\n",
+        )
+        .stdout("3.14159 0.000 0.000 3.14159 10.000\n"),
     )
 }
 
 #[test]
 fn toupper_tolower() {
     run_test(
-        Some("hello, WORLD!\n"),
-        r#"{ printf("%s|%s|%s\n", tolower($0), toupper($0), $0)}"#,
-        "hello, world!|HELLO, WORLD!|hello, WORLD!\n",
+        Test::new(r#"{ printf("%s|%s|%s\n", tolower($0), toupper($0), $0)}"#)
+            .input("hello, WORLD!\n")
+            .stdout("hello, world!|HELLO, WORLD!|hello, WORLD!\n"),
     )
 }
 
@@ -51,7 +52,7 @@ fn rand() {
     let script = script.replace("FILE1", &path1.to_string_lossy());
     let script = script.replace("FILE2", &path2.to_string_lossy());
 
-    run_test(None, &script, "");
+    run_test(Test::new(&script));
 
     let contents1 = read_file(path1);
     let contents2 = read_file(path2);
@@ -67,7 +68,7 @@ fn printf_arg_list_not_evaluated() {
                     print "BAD: T.builtin (printf arg list not evaluated)"
         }
         "#;
-    run_test(None, &script, "");
+    run_test(Test::new(&script));
 }
 
 #[test]
@@ -79,7 +80,7 @@ fn substr_arg_list_not_evaluated() {
                     print "BAD: T.builtin (substr arg list not evaluated)"
         }
         "#;
-    run_test(None, &script, "");
+    run_test(Test::new(&script));
 }
 
 #[test]
@@ -91,7 +92,7 @@ fn sub_arg_list_not_evaluated() {
                     print "BAD: T.builtin (sub() arg list not evaluated)"
         }
         "#;
-    run_test(None, &script, "");
+    run_test(Test::new(&script));
 }
 
 #[test]
@@ -99,41 +100,57 @@ fn sub() {
     let input = "aa\nnope\nba";
     let output = "ba 1\nnope 0\nbb 1\n";
     let script = r#"{ n = sub(/a/, "b"); print $0, n }"#;
-    run_test(Some(input), &script, output);
+    run_test(Test::new(&script).input(input).stdout(output));
 
     let input = "a1a";
     let output = "aba 1\n";
     let script = r#"{ n = sub(1, "b"); print $0, n }"#;
-    run_test(Some(input), &script, output);
+    run_test(Test::new(&script).input(input).stdout(output));
 
     let output = "ba 1\n";
     let script = r#"BEGIN { s = "aa"; n = sub("a", "b", s); print s, n }"#;
-    run_test(None, &script, output);
+    run_test(Test::new(&script).stdout(output));
 
     let input = "aa aa aa";
     let output = "aa ba aa ba 1\n";
     let script = r#"{ n = sub("a", "b", $2); print $0, $2, n }"#;
-    run_test(Some(input), &script, output);
+    run_test(Test::new(&script).input(input).stdout(output));
 
     let output = "ba 1\n";
     let script = r#"BEGIN { arr[0] = "aa"; n = sub("a", "b", arr[0]); print arr[0], n }"#;
-    run_test(None, &script, output);
+    run_test(Test::new(&script).stdout(output));
 
     let input = "nope\nhello john1!";
     let output = "nope 0\nhello connor, john1! 1\n";
     let script = r#"{ n = sub(/john[0-9]/, "connor, &"); print $0, n }"#;
-    run_test(Some(input), &script, output);
+    run_test(Test::new(&script).input(input).stdout(output));
 
     let output = "hello connor, &! 1\n";
     let script =
         r#"BEGIN { s = "hello john1!"; n = sub(/john[0-9]/, "connor, \\&", s); print s, n }"#;
-    run_test(None, &script, output);
+    run_test(Test::new(&script).stdout(output));
 
     let output = "hello john1 & john1! 1\n";
     let script = r#"BEGIN { s = "hello john1!"; n = sub(/john[0-9]/, "& \\& &", s); print s, n }"#;
-    run_test(None, &script, output);
+    run_test(Test::new(&script).stdout(output));
 
     let output = "helli%s\t! 1\n";
     let script = r#"BEGIN { s = "hello!"; n = sub("o", "i%s\t", s); print s, n }"#;
-    run_test(None, &script, output);
+    run_test(Test::new(&script).stdout(output));
+}
+
+#[test]
+fn length_too_many_args() {
+    let script = r#"
+        BEGIN {
+            j = 1; length("zzzz", ++j, ++j)	# does j get incremented?
+            if (j != 3)
+                    print "BAD: T.builtin (excess length args not evaluated)"
+        }
+        "#;
+    run_test(
+        Test::new(&script)
+            .stderr("Function 'length' expects 0 or 1 arguments but got 3\n")
+            .should_fail(),
+    );
 }

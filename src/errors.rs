@@ -2,10 +2,20 @@ use failure_derive::Fail;
 
 #[derive(Debug, Fail)]
 pub enum EvaluationError {
+    #[fail(display = "Function '{}' expects {} arguments but got {}", _0, _1, _2)]
+    InvalidNumberOfArguments(String, usize, usize),
+    #[fail(
+        display = "Function '{}' expects {} or {} arguments but got {}",
+        _0, _1, _2, _3
+    )]
+    InvalidNumberOfArgumentsRange(String, usize, usize, usize),
+    #[fail(
+        display = "Function '{}' expects at least {} arguments but got {}",
+        _0, _1, _2
+    )]
+    InvalidNumberOfArgumentsLowerBound(String, usize, usize),
     #[fail(display = "{}: not enought arguments to satisfy format string", _0)]
     MissingFormatStringArgs(String),
-    #[fail(display = "Function '{}' expected {} arguments but got {}", _0, _1, _2)]
-    InvalidNumberOfArguments(String, usize, usize),
     #[fail(display = "division by zero attempted")]
     DivisionByZero,
     #[fail(display = "attempt to access field {}", _0)]

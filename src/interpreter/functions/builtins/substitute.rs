@@ -102,9 +102,10 @@ pub fn sub<Output: Write>(
             }
             Ok(Value::from(1))
         },
-        _ => Err(EvaluationError::InvalidNumberOfArguments(
+        _ => Err(EvaluationError::InvalidNumberOfArgumentsRange(
             String::from("sub"),
-            1,
+            2,
+            3,
             args.len(),
         )),
     }

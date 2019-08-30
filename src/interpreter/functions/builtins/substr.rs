@@ -21,9 +21,10 @@ pub fn execute<Output: Write>(
             let len = len.eval(rt)?.as_number();
             Ok(Value::from(substr(&string, offset as usize, len as usize)))
         },
-        _ => Err(EvaluationError::InvalidNumberOfArguments(
+        _ => Err(EvaluationError::InvalidNumberOfArgumentsRange(
             String::from("substr"),
             2,
+            3,
             args.len(),
         )),
     }

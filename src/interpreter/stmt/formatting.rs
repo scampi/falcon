@@ -470,7 +470,7 @@ pub fn sprintf<Output: Write>(
     rt: &mut RuntimeMut<'_, Output>,
 ) -> Result<Value, EvaluationError> {
     if args.len() == 0 {
-        return Err(EvaluationError::InvalidNumberOfArguments(
+        return Err(EvaluationError::InvalidNumberOfArgumentsLowerBound(
             String::from("sprintf"),
             1,
             args.len(),

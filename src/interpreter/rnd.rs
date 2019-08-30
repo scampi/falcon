@@ -34,8 +34,9 @@ impl Rnd {
                 Ok(since_the_epoch)
             },
             [seed] => Ok(seed.eval(rt)?.as_number().trunc() as u64),
-            _ => Err(EvaluationError::InvalidNumberOfArguments(
+            _ => Err(EvaluationError::InvalidNumberOfArgumentsRange(
                 String::from("srand"),
+                0,
                 1,
                 args.len(),
             )),
