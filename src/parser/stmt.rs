@@ -2,7 +2,7 @@ use crate::parser::{
     ast::*,
     expr::*,
     util::{
-        parse_name, skip_comments, skip_newlines, skip_wrapping_newlines, skip_wrapping_spaces,
+        parse_var_name, skip_comments, skip_newlines, skip_wrapping_newlines, skip_wrapping_spaces,
     },
 };
 use combine::{
@@ -169,9 +169,9 @@ parser! {
     {
         (
             skip_wrapping_spaces(string("for")).with(skip_wrapping_spaces(char('('))),
-            parse_name(),
+            parse_var_name(),
             skip_wrapping_spaces(string("in")),
-            parse_name(),
+            parse_var_name(),
             skip_wrapping_spaces(char(')')).skip(skip_newlines()),
             parse_stmt(),
         )
@@ -224,7 +224,7 @@ parser! {
     ]
     {
         skip_wrapping_spaces(string("delete"))
-            .with(parse_name())
+            .with(parse_var_name())
             .and(between(
                 skip_wrapping_spaces(char('[')),
                 skip_wrapping_spaces(char(']')),

@@ -7,20 +7,9 @@ use std::io::Write;
 
 pub fn is_builtin(name: &str) -> bool {
     match name {
-        "index" => true,
-        "substr" => true,
-        "atan2" => true,
-        "sin" => true,
-        "cos" => true,
-        "exp" => true,
-        "log" => true,
-        "toupper" => true,
-        "tolower" => true,
-        "rand" => true,
-        "srand" => true,
-        "sprintf" => true,
-        "sub" => true,
-        "length" => true,
+        "atan2" | "close" | "cos" | "exp" | "gsub" | "index" | "int" | "length" | "log"
+        | "match" | "rand" | "sin" | "split" | "sprintf" | "sqrt" | "srand" | "sub" | "substr"
+        | "system" | "tolower" | "toupper" => true,
         _ => false,
     }
 }

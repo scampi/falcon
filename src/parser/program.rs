@@ -1,10 +1,10 @@
 use crate::{
-    interpreter::functions::builtins::is_builtin,
+    interpreter::{functions::builtins::is_builtin, variables::is_special_variable},
     parser::{
         ast::*,
         expr::*,
         stmt::*,
-        util::{is_special_variable, parse_func_name, parse_name, skip_wrapping_spaces},
+        util::{parse_func_name, parse_var_name, skip_wrapping_spaces},
     },
 };
 use combine::{
@@ -102,7 +102,7 @@ parser! {
             between(
                 skip_wrapping_spaces(char('(')),
                 skip_wrapping_spaces(char(')')),
-                sep_by(parse_name(), skip_wrapping_spaces(char(','))),
+                sep_by(parse_var_name(), skip_wrapping_spaces(char(','))),
             ),
             parse_stmt_list(),
         )

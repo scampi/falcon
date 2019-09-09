@@ -1,13 +1,27 @@
+//! This module manages variables appearing in the script. A variable is by
+//! default global, but can be local if declared within a function. A variable
+//! is either a scalar or an array and this module provides logic for
+//! getting/setting from/to a variable. AWK scripts provide special variables
+//! which are managed here as well.
 use crate::{errors::EvaluationError, interpreter::value::Value, parser::ast::AssignType};
 use std::collections::{hash_map::Entry, HashMap};
 
+/// A FunctionCall is created when an user-defined function is evaluated. It
+/// captures array variables that are passed as references, and copies the
+/// values of other scalar arguments.
 #[derive(Debug)]
 struct FunctionCall {
+    /// Scalar arguments passed to a function.
     locals: HashMap<String, Value>,
+    /// Array arguments are passed by reference.
+    /// The key is the variable name as declared in the function's signature,
+    /// with the key the name of the array it references.
     references: HashMap<String, String>,
 }
 
 impl FunctionCall {
+    /// Returns the value associated with the variable of the given name by
+    /// looking into the call stack.
     fn get<'a>(&'a self, globals: &'a HashMap<String, Value>, name: &str) -> Option<&'a Value> {
         if let Some(alias) = self.references.get(name) {
             if let Some(value) = globals.get(alias) {
@@ -49,6 +63,13 @@ pub struct Variables {
     pub subsep: String,
 }
 
+pub fn is_special_variable(name: &str) -> bool {
+    match name {
+        "FNR" | "FS" | "NF" | "NR" | "OFMT" | "OFS" | "ORS" | "SUBSEP" => true,
+        _ => false,
+    }
+}
+
 impl Variables {
     pub fn new() -> Variables {
         Variables {
@@ -68,13 +89,6 @@ impl Variables {
     #[cfg(test)]
     pub fn has_user_vars(&self) -> bool {
         !self.globals.is_empty()
-    }
-
-    fn is_special_variable(&self, name: &str) -> bool {
-        match name {
-            "FNR" | "FS" | "NF" | "NR" | "OFMT" | "OFS" | "ORS" | "SUBSEP" => true,
-            _ => false,
-        }
     }
 
     pub fn push_local_stack(
@@ -148,7 +162,7 @@ impl Variables {
 
     pub fn get(&self, name: &str, subscript: Option<&str>) -> Result<Value, EvaluationError> {
         match name {
-            _ if self.is_special_variable(name) && subscript.is_some() => {
+            _ if is_special_variable(name) && subscript.is_some() => {
                 Err(EvaluationError::UseScalarAsArray)
             },
             "FNR" => Ok(Value::from(self.fnr)),
@@ -213,7 +227,7 @@ impl Variables {
         new_value: Value,
     ) -> Result<Value, EvaluationError> {
         match name {
-            _ if self.is_special_variable(name) && subscript.is_some() => {
+            _ if is_special_variable(name) && subscript.is_some() => {
                 Err(EvaluationError::UseScalarAsArray)
             },
             "FNR" => {

@@ -1,3 +1,4 @@
+use crate::interpreter::functions::builtins::is_builtin;
 use combine::{
     error::{ParseError, StreamError},
     parser::{
@@ -11,7 +12,8 @@ use combine::{
     stream::{RangeStream, Stream, StreamErrorFor, StreamOnce},
 };
 
-pub fn parse_name<I>() -> impl Parser<Input = I, Output = String>
+/// Returns a valid variable identifier.
+pub fn parse_var_name<I>() -> impl Parser<Input = I, Output = String>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -32,6 +34,7 @@ where
         })
 }
 
+/// Returns a valid function identifier.
 pub fn parse_func_name<I>() -> impl Parser<Input = I, Output = String>
 where
     I: Stream<Item = char>,
@@ -53,15 +56,7 @@ where
         })
 }
 
-fn is_builtin(name: &str) -> bool {
-    match name {
-        "atan2" | "close" | "cos" | "exp" | "gsub" | "index" | "int" | "length" | "log"
-        | "match" | "rand" | "sin" | "split" | "sprintf" | "sqrt" | "srand" | "sub" | "substr"
-        | "system" | "tolower" | "toupper" => true,
-        _ => false,
-    }
-}
-
+/// Returns true if the given string is a reserved keyword.
 fn is_keyword(name: &str) -> bool {
     match name {
         "BEGIN" | "break" | "continue" | "delete" | "do" | "else" | "END" | "exit" | "for"
@@ -71,6 +66,7 @@ fn is_keyword(name: &str) -> bool {
     }
 }
 
+/// Returns a quoted string, without the wrapping quotes.
 pub fn parse_string<'a, I: 'a>() -> impl Parser<Input = I, Output = String> + 'a
 where
     I: RangeStream<Item = char, Range = &'a str>,
@@ -88,6 +84,7 @@ where
     .map(|s: &str| s.to_owned())
 }
 
+/// Returns a regular expression as a string.
 pub fn parse_regexp<'a, I: 'a>() -> impl Parser<Input = I, Output = String> + 'a
 where
     I: RangeStream<Item = char, Range = &'a str>,
@@ -105,6 +102,8 @@ where
     .map(|s: &str| s.to_owned())
 }
 
+/// Skips tabulation, whitespace, and newline characters appearing before and
+/// after the given parser.
 pub fn skip_all_wrapping_spaces<P>(p: P) -> impl Parser<Input = P::Input, Output = P::Output>
 where
     P: Parser,
@@ -118,6 +117,8 @@ where
     skip_many(one_of("\r\n\t ".chars())).with(p.skip(skip_many(one_of("\r\n\t ".chars()))))
 }
 
+/// Skips tabulation and whitespace characters appearing before and after the
+/// given parser.
 pub fn skip_wrapping_spaces<P>(p: P) -> impl Parser<Input = P::Input, Output = P::Output>
 where
     P: Parser,
@@ -131,6 +132,7 @@ where
     skip_whitespaces().with(p.skip(skip_whitespaces()))
 }
 
+/// Skips tabulation and whitespace characters.
 pub fn skip_whitespaces<I>() -> impl Parser<Input = I>
 where
     I: Stream<Item = char>,
@@ -140,6 +142,7 @@ where
     skip_many(one_of("\t ".chars()))
 }
 
+/// Skip newline characters that appear before and after the given parser.
 pub fn skip_wrapping_newlines<P>(p: P) -> impl Parser<Input = P::Input, Output = P::Output>
 where
     P: Parser,
@@ -153,6 +156,7 @@ where
     skip_newlines().with(p.skip(skip_newlines()))
 }
 
+/// Skip newline characters.
 pub fn skip_newlines<I>() -> impl Parser<Input = I>
 where
     I: Stream<Item = char>,
@@ -162,6 +166,9 @@ where
     skip_many(one_of("\r\n".chars()))
 }
 
+/// Skip comments appearing in the script.
+/// A comment starts with a pound sign and all input till the end of the newline
+/// is skipped.
 pub fn skip_comments<P>(p: P) -> impl Parser<Input = P::Input, Output = P::Output>
 where
     P: Parser,
@@ -175,13 +182,6 @@ where
     skip_many(char('#').and(skip_until(char('\n'))).and(char('\n'))).with(p)
 }
 
-pub fn is_special_variable(name: &str) -> bool {
-    match name {
-        "FNR" | "FS" | "NF" | "NR" | "SUBSEP" => true,
-        _ => false,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,14 +191,14 @@ mod tests {
     };
 
     fn is_valid_name(name: &str) {
-        let res = parse_name().easy_parse(name);
+        let res = parse_var_name().easy_parse(name);
         assert!(res.is_ok(), "{:?}", res);
         let res = res.unwrap();
         assert_eq!(res.0, String::from(name), "{:?}", res);
     }
 
     fn is_not_valid_name(name: &str) {
-        let res = parse_name().easy_parse(name);
+        let res = parse_var_name().easy_parse(name);
         assert!(res.is_err(), "{:?}", res);
     }
 
@@ -209,15 +209,15 @@ mod tests {
         is_valid_name("gargoyles1");
         is_valid_name("_gargoyles");
 
-        // parse_name should take all valid characters, and let the rest be handled by
-        // another parser
-        let res = parse_name().easy_parse("john connor");
+        // parse_var_name should take all valid characters, and let the rest be handled
+        // by another parser
+        let res = parse_var_name().easy_parse("john connor");
         assert!(res.is_ok(), "{:?}", res);
         let res = res.unwrap();
         assert_eq!(res.0, String::from("john"), "{:?}", res);
         assert_eq!(res.1, String::from(" connor"), "{:?}", res);
 
-        let res = parse_name().easy_parse("john++");
+        let res = parse_var_name().easy_parse("john++");
         assert!(res.is_ok(), "{:?}", res);
         let res = res.unwrap();
         assert_eq!(res.0, String::from("john"), "{:?}", res);

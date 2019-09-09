@@ -1,6 +1,7 @@
 use regex::Regex;
 use std::fmt;
 
+/// A program represents the complete AWK script.
 #[derive(Debug, PartialEq)]
 pub struct Program {
     pub items: Vec<Item>,
@@ -11,6 +12,7 @@ impl Program {
         Program { items }
     }
 
+    #[cfg(test)]
     pub fn empty() -> Program {
         Program { items: vec![] }
     }

@@ -1,7 +1,8 @@
+//! Parses an expression using a LR approach.
 use crate::parser::{
     ast::*,
     util::{
-        parse_func_name, parse_name, parse_regexp, parse_string, skip_all_wrapping_spaces,
+        parse_func_name, parse_regexp, parse_string, parse_var_name, skip_all_wrapping_spaces,
         skip_newlines, skip_whitespaces, skip_wrapping_spaces,
     },
 };
@@ -330,7 +331,7 @@ parser! {
     ]
     {
         p.and(optional(
-            attempt(skip_wrapping_spaces(string("in"))).with(parse_name())
+            attempt(skip_wrapping_spaces(string("in"))).with(parse_var_name())
         ))
         .map(|(left_expr, array_name)| {
             if let Some(array_name) = array_name {
@@ -569,7 +570,7 @@ parser! {
     {
         choice((
             attempt(
-                parse_name()
+                parse_var_name()
                     .and(between(
                         skip_wrapping_spaces(char('[')),
                         skip_wrapping_spaces(char(']')),
@@ -580,7 +581,7 @@ parser! {
             attempt(skip_whitespaces().skip(char('$')))
             .with(leaf())
             .map(|expr| LValueType::Dollar(Box::new(expr))),
-            attempt(parse_name().map(|name| LValueType::Name(name))),
+            attempt(parse_var_name().map(|name| LValueType::Name(name))),
         ))
     }
 }

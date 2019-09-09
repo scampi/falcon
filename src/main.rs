@@ -20,6 +20,7 @@ mod errors;
 mod interpreter;
 mod parser;
 
+/// CLI options of the falcon binary.
 #[derive(StructOpt, Debug)]
 #[structopt(raw(setting = "AppSettings::ColoredHelp"))]
 #[structopt(raw(setting = "AppSettings::ArgRequiredElseHelp"))]
@@ -78,6 +79,7 @@ fn main() {
     process::exit(exitcode::OK);
 }
 
+/// Parse the the AWK script and returns the Program.
 fn get_program(input: &str) -> Program {
     let prog = match parse_program().easy_parse(State::new(input)) {
         Ok(p) => p,
@@ -94,6 +96,8 @@ fn get_program(input: &str) -> Program {
     }
 }
 
+/// Executes the parsed AWK script against the set of input files. If there are
+/// no input files, it reads data from standard input.
 fn run_program(program: Program, inputs: Vec<PathBuf>) -> Result<(), EvaluationError> {
     let stdout = io::stdout();
     let mut handle = stdout.lock();

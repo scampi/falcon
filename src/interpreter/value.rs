@@ -1,11 +1,17 @@
+//! A value represents the result of an expression. A value can either be
+//! uninitialised, a boolean, a number, a string or an array of the previous
+//! types. This modules provides methods for creating new values from primitives
+//! and the ability to convert from one type to another.
 use crate::{
     errors::EvaluationError,
     parser::ast::{AssignType, CmpOperator},
 };
 use std::{collections::HashMap, fmt};
 
+/// A value represents the result of an expression.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
+    /// An uninitialised value can become any type, depending on how it is used.
     Uninitialised,
     Bool(bool),
     Number(f64),
@@ -68,6 +74,7 @@ impl fmt::Display for Value {
 }
 
 impl Value {
+    /// Returns true if the value is not an array.
     pub fn is_scalar(&self) -> bool {
         match self {
             Value::Bool(_) | Value::String(_) | Value::Number(_) => true,
@@ -75,6 +82,7 @@ impl Value {
         }
     }
 
+    /// Converts the value into a string.
     pub fn as_string(&self) -> String {
         match self {
             Value::Array(..) => unreachable!(),
@@ -85,6 +93,7 @@ impl Value {
         }
     }
 
+    /// Converts the value into a boolean.
     pub fn as_bool(&self) -> bool {
         match self {
             Value::Array(..) => unreachable!(),
@@ -95,6 +104,7 @@ impl Value {
         }
     }
 
+    /// Converts the value into a number.
     pub fn as_number(&self) -> f64 {
         match self {
             Value::Array(..) => unreachable!(),
@@ -114,6 +124,7 @@ impl Value {
         }
     }
 
+    /// Compares two values according to an operator.
     pub fn compare(op: &CmpOperator, a: &Value, b: &Value) -> Value {
         let res = match (a, b) {
             (Value::Number(a), Value::Number(b)) => op.compare(a, b),
@@ -134,6 +145,7 @@ impl Value {
         Value::Bool(res)
     }
 
+    /// Apply an operation on both values and returns the result.
     pub fn compute(op: AssignType, a: Value, b: Value) -> Result<Value, EvaluationError> {
         match op {
             AssignType::Pow => Ok(Value::from(a.as_number().powf(b.as_number()))),

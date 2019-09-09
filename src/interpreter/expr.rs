@@ -1,3 +1,4 @@
+//! Evaluates an expression based on a given runtime.
 use crate::{
     errors::EvaluationError,
     interpreter::{value::Value, variables::Variables, Eval, RuntimeMut},

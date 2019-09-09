@@ -58,7 +58,7 @@ impl Functions {
         match self.funcs.get(name) {
             Some(Item::FunctionDef(_, params, stmts)) => {
                 if args.len() > params.len() {
-                    return Err(EvaluationError::TooManyArguments(
+                    return Err(EvaluationError::InvalidNumberOfArguments(
                         name.to_owned(),
                         args.len(),
                         params.len(),

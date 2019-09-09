@@ -1,3 +1,4 @@
+//! Evaluate the AWK script against the input lines.
 use crate::{
     errors::EvaluationError,
     parser::ast::{Item, Pattern, Program},
@@ -10,24 +11,35 @@ mod record;
 mod rnd;
 mod stmt;
 mod value;
-mod variables;
+pub mod variables;
 
+/// Runtime contains all the components needed for the execution of a script.
 #[derive(Debug)]
 pub struct Runtime<'a, Output>
 where
     Output: Write,
 {
+    /// The stream to print the script's output.
     output: &'a mut Output,
+    /// The set of variables used in the script.
     vars: variables::Variables,
+    /// The current line split on a separator.
     record: record::Record,
+    /// User-defined functions and builtins.
     funcs: functions::Functions,
+    /// List of files to redirect the output to.
     redirs: stmt::redirections::Redirections,
+    /// Random functions of AWK.
     rnd: rnd::Rnd,
+    /// Set of `BEGIN` patterns.
     begin_patterns: Vec<Item>,
+    /// Set of `END` patterns.
     end_patterns: Vec<Item>,
+    /// Set of patterns that are neither `BEGIN` nor `END`.
     patterns: Vec<EvalItem>,
 }
 
+/// A `Runtime`-version that allows to mutate one or more of its components.
 pub struct RuntimeMut<'a, Output>
 where
     Output: Write,
@@ -63,9 +75,12 @@ where
     }
 }
 
+/// An `Item` to be evaluated against the current input line.
 #[derive(Debug)]
 struct EvalItem {
     item: Item,
+    /// Whether or not the item is within a range pattern. If true, the `end`
+    /// pattern is matched against.
     in_range: bool,
 }
 
@@ -82,6 +97,7 @@ impl<'a, Output> Runtime<'a, Output>
 where
     Output: Write,
 {
+    /// Creates a Runtime for the given AWK program.
     pub fn new(
         program: Program,
         output: &'a mut Output,
@@ -108,6 +124,7 @@ where
         Ok(rt)
     }
 
+    /// Sets the next input line.
     pub fn set_next_record(&mut self, record: String) {
         self.record.update_record(&mut self.vars, record);
         // update record numbers
@@ -115,6 +132,8 @@ where
         self.vars.nr += 1;
     }
 
+    /// Evaluates the `BEGIN` patterns in order they appear in the script
+    /// against the current input line.
     pub fn execute_begin_patterns(&mut self) -> Result<(), EvaluationError> {
         let mut rt_mut = RuntimeMut::new(
             &mut self.output,
@@ -136,6 +155,8 @@ where
         Ok(())
     }
 
+    /// Evaluates the `END` patterns in order they appear in the script against
+    /// the current input line.
     pub fn execute_end_patterns(&mut self) -> Result<(), EvaluationError> {
         let mut rt_mut = RuntimeMut::new(
             &mut self.output,
@@ -157,6 +178,8 @@ where
         Ok(())
     }
 
+    /// Evaluates all the patterns that are not `BEGIN` or `END` against the
+    /// current input line.
     pub fn execute_main_patterns(&mut self) -> Result<(), EvaluationError> {
         let mut rt_mut = RuntimeMut::new(
             &mut self.output,
@@ -198,6 +221,7 @@ where
     }
 }
 
+/// Evaluates an element of the AWK script against the given Runtime.
 trait Eval {
     type EvalResult;
     fn eval<Output>(
@@ -235,7 +259,7 @@ mod tests {
         let mut out = Cursor::new(Vec::new());
         let mut rt = Runtime::new(prog, &mut out).unwrap();
         match rt.execute_main_patterns().unwrap_err() {
-            EvaluationError::TooManyArguments(ref name, 2, 1) if name == "adder" => (),
+            EvaluationError::InvalidNumberOfArguments(ref name, 2, 1) if name == "adder" => (),
             err @ _ => panic!("Unexpected error: {}", err),
         };
 
