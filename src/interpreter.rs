@@ -756,4 +756,78 @@ a b"#;
             Value::from("here".to_owned())
         );
     }
+
+    #[test]
+    fn function_calls_array_references() {
+        let prog = get_program(
+            r#"
+            function test1(c) {
+                test2(c)
+            }
+
+            function test2(b, a) {
+                a[0]--;
+                b[0]++;
+            }
+
+            BEGIN { a[0] = 1; test1(a) }
+        "#,
+        );
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
+
+        rt.execute_begin_patterns().unwrap();
+        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::from(2));
+    }
+
+    #[test]
+    fn function_calls_array_references_delete() {
+        let prog = get_program(
+            r#"
+            function test1(c) {
+                test2(c)
+            }
+
+            function test2(b, a) {
+                delete b[0];
+                a[0]--;
+            }
+
+            BEGIN { a[0] = 1; test1(a) }
+        "#,
+        );
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
+
+        rt.execute_begin_patterns().unwrap();
+        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::Uninitialised);
+    }
+
+    #[test]
+    fn function_calls_local_array() {
+        let prog = get_program(
+            r#"
+            function test1(c) {
+                test2(c)
+            }
+
+            function test2(b, a) {
+                a[0]--;
+                test3(b, a)
+            }
+
+            function test3(b, a) {
+                a[0]--;
+                b[0]++;
+            }
+
+            BEGIN { a[0] = 1; test1(a) }
+        "#,
+        );
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
+
+        rt.execute_begin_patterns().unwrap();
+        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::from(2));
+    }
 }

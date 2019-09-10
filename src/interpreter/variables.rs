@@ -37,7 +37,7 @@ impl FunctionCall {
 #[derive(Debug)]
 pub struct Variables {
     pub globals: HashMap<String, Value>,
-    locals: Vec<FunctionCall>,
+    function_calls: Vec<FunctionCall>,
     ///// The number of arguments
     //argc: usize,
     ///// The command line arguments
@@ -74,7 +74,7 @@ impl Variables {
     pub fn new() -> Variables {
         Variables {
             globals: HashMap::new(),
-            locals: Vec::new(),
+            function_calls: Vec::new(),
             fnr: 0,
             fs: String::from(" "),
             nf: 0,
@@ -96,11 +96,12 @@ impl Variables {
         locals: HashMap<String, Value>,
         references: HashMap<String, String>,
     ) {
-        self.locals.push(FunctionCall { locals, references });
+        self.function_calls
+            .push(FunctionCall { locals, references });
     }
 
     pub fn pop_local_stack(&mut self) {
-        if self.locals.pop().is_none() {
+        if self.function_calls.pop().is_none() {
             unreachable!()
         }
     }
@@ -111,8 +112,8 @@ impl Variables {
             Value::Array(array) => Ok(array.keys().map(|key| key.to_owned()).collect()),
             _ => return Err(EvaluationError::UseScalarAsArray),
         };
-        if let Some(locals) = self.locals.last() {
-            if let Some(value) = locals.get(&self.globals, name) {
+        if let Some(function_call) = self.function_calls.last() {
+            if let Some(value) = function_call.get(&self.globals, name) {
                 return _keys(value);
             }
         }
@@ -124,32 +125,38 @@ impl Variables {
     }
 
     pub fn delete(&mut self, name: &str, key: &str) -> Result<(), EvaluationError> {
-        let _delete = |vars: &mut HashMap<String, Value>, name: &str| {
-            if let Entry::Occupied(mut entry) = vars.entry(name.to_owned()) {
-                match entry.get_mut() {
-                    Value::Uninitialised => (),
-                    Value::Array(array) => {
-                        if let Entry::Occupied(entry) = array.entry(key.to_owned()) {
-                            entry.remove_entry();
-                        }
-                    },
-                    _ => return Err(EvaluationError::UseScalarAsArray),
+        // To find the set of variables to delete the entry at key for the named array,
+        // start from the top of calls:
+        // - check locals of the call for a variable with given name, if found then done
+        // - check the references
+        //     - if missing, then done
+        //     - if found, then check the parent call and iterate to the next call with
+        //       the referenced name
+        let mut vars = &mut self.globals;
+        let mut referred_var = name;
+        for FunctionCall { locals, references } in self.function_calls.iter_mut().rev() {
+            if locals.contains_key(referred_var) {
+                vars = locals;
+                break;
+            } else {
+                match references.get(referred_var) {
+                    Some(reference) => referred_var = reference,
+                    None => break,
                 }
             }
-            return Ok(());
-        };
-        if let Some(FunctionCall {
-            ref mut locals,
-            references,
-        }) = self.locals.last_mut()
-        {
-            if locals.contains_key(name) {
-                return _delete(locals, name);
-            } else if let Some(reference) = references.get(name) {
-                return _delete(&mut self.globals, reference);
+        }
+        if let Entry::Occupied(mut entry) = vars.entry(referred_var.to_owned()) {
+            match entry.get_mut() {
+                Value::Uninitialised => (),
+                Value::Array(array) => {
+                    if let Entry::Occupied(entry) = array.entry(key.to_owned()) {
+                        entry.remove_entry();
+                    }
+                },
+                _ => return Err(EvaluationError::UseScalarAsArray),
             }
         }
-        return _delete(&mut self.globals, name);
+        Ok(())
     }
 
     pub fn array_key(values: Vec<Value>) -> Result<String, EvaluationError> {
@@ -173,37 +180,53 @@ impl Variables {
             "OFS" => Ok(Value::from(self.ofs.to_owned())),
             "ORS" => Ok(Value::from(self.ors.to_owned())),
             "SUBSEP" => Ok(Value::from(self.subsep.to_owned())),
-            _ => {
-                if let Some(value) = self.get_local_var(name, subscript) {
-                    value
-                } else {
-                    Variables::get_var(&self.globals, name, subscript)
-                }
-            },
+            _ => self.get_var(name, subscript),
         }
     }
 
-    fn get_local_var(
-        &self,
-        name: &str,
-        subscript: Option<&str>,
-    ) -> Option<Result<Value, EvaluationError>> {
-        if let Some(FunctionCall { locals, references }) = self.locals.last() {
-            if locals.contains_key(name) {
-                return Some(Variables::get_var(locals, name, subscript));
-            } else if let Some(reference) = references.get(name) {
-                return Some(Variables::get_var(&self.globals, reference, subscript));
+    pub fn is_array(&self, name: &str) -> bool {
+        if let Some(FunctionCall { locals, references }) = self.function_calls.last() {
+            let is_array_reference = references.contains_key(name);
+            let is_local_array = locals.get(name).map_or(false, |value| {
+                if let Value::Array(_) = value {
+                    true
+                } else {
+                    false
+                }
+            });
+            if is_array_reference || is_local_array {
+                return true;
             }
         }
-        None
+        if let Some(Value::Array(_)) = self.globals.get(name) {
+            true
+        } else {
+            false
+        }
     }
 
-    fn get_var(
-        vars: &HashMap<String, Value>,
-        name: &str,
-        subscript: Option<&str>,
-    ) -> Result<Value, EvaluationError> {
-        match vars.get(name) {
+    fn get_var(&self, name: &str, subscript: Option<&str>) -> Result<Value, EvaluationError> {
+        // To find the set of variables to get the value from, start from the top of
+        // calls:
+        // - check locals of the call for a variable with given name, if found then done
+        // - check the references
+        //     - if missing, then done
+        //     - if found, then check the parent call and iterate to the next call with
+        //       the referenced name
+        let mut vars = &self.globals;
+        let mut referred_var = name;
+        for FunctionCall { locals, references } in self.function_calls.iter().rev() {
+            if locals.contains_key(referred_var) {
+                vars = locals;
+                break;
+            } else {
+                match references.get(referred_var) {
+                    Some(reference) => referred_var = reference,
+                    None => break,
+                }
+            }
+        }
+        match vars.get(referred_var) {
             Some(value) => match (subscript, value) {
                 (Some(..), _) if value.is_scalar() => Err(EvaluationError::UseScalarAsArray),
                 (None, Value::Array(_)) => Err(EvaluationError::UseArrayInScalarContext),
@@ -270,53 +293,38 @@ impl Variables {
                 self.subsep = result.as_string();
                 Ok(Value::from(self.subsep.to_owned()))
             },
-            _ => {
-                if let Some(value) = self.set_local_var(ty, name, subscript, &new_value) {
-                    value
-                } else {
-                    Variables::set_var(&mut self.globals, ty, name, subscript, new_value)
-                }
-            },
+            _ => self.set_var(ty, name, subscript, new_value),
         }
-    }
-
-    fn set_local_var(
-        &mut self,
-        ty: AssignType,
-        name: &str,
-        subscript: Option<&str>,
-        new_value: &Value,
-    ) -> Option<Result<Value, EvaluationError>> {
-        if let Some(FunctionCall { locals, references }) = self.locals.last_mut() {
-            if locals.contains_key(name) {
-                return Some(Variables::set_var(
-                    locals,
-                    ty,
-                    name,
-                    subscript,
-                    new_value.clone(),
-                ));
-            } else if let Some(reference) = references.get(name) {
-                return Some(Variables::set_var(
-                    &mut self.globals,
-                    ty,
-                    reference,
-                    subscript,
-                    new_value.clone(),
-                ));
-            }
-        }
-        None
     }
 
     fn set_var(
-        vars: &mut HashMap<String, Value>,
+        &mut self,
         ty: AssignType,
         name: &str,
         subscript: Option<&str>,
         new_value: Value,
     ) -> Result<Value, EvaluationError> {
-        match vars.entry(name.to_owned()) {
+        // To find the set of variables to set the value to, start from the top of
+        // calls:
+        // - check locals of the call for a variable with given name, if found then done
+        // - check the references
+        //     - if missing, then done
+        //     - if found, then check the parent call and iterate to the next call with
+        //       the referenced name
+        let mut vars = &mut self.globals;
+        let mut referred_var = name;
+        for FunctionCall { locals, references } in self.function_calls.iter_mut().rev() {
+            if locals.contains_key(referred_var) {
+                vars = locals;
+                break;
+            } else {
+                match references.get(referred_var) {
+                    Some(reference) => referred_var = reference,
+                    None => break,
+                }
+            }
+        }
+        match vars.entry(referred_var.to_owned()) {
             Entry::Occupied(mut entry) => match (subscript, entry.get_mut()) {
                 (Some(..), ref v) if v.is_scalar() => Err(EvaluationError::UseScalarAsArray),
                 (None, Value::Array(..)) => Err(EvaluationError::UseArrayInScalarContext),

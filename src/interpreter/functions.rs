@@ -77,7 +77,7 @@ impl Functions {
                     // globally defined array instead of creating a new one within the
                     // function's scope.
                     if let Expr::LValue(LValueType::Name(name)) = arg {
-                        if let Some(Value::Array(_)) = rt.vars.globals.get(name) {
+                        if rt.vars.is_array(name) {
                             references.insert(param.to_owned(), name.to_owned());
                             continue;
                         }
