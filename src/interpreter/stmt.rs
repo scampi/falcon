@@ -1,7 +1,7 @@
 //! Evaluates a statement.
 use crate::{
     errors::EvaluationError,
-    interpreter::{value::Value, variables::Variables, Eval, RuntimeMut},
+    interpreter::{value::Value, Eval, RuntimeMut},
     parser::ast::{AssignType, Stmt},
 };
 use std::io::Write;
@@ -119,7 +119,8 @@ impl Eval for Stmt {
                 None => Ok(Some(StmtResult::Return(Value::Uninitialised))),
             },
             Stmt::Delete(array, index) => {
-                let key_str = Variables::array_key(index.eval(rt)?)?;
+                let values = index.eval(rt)?;
+                let key_str = rt.vars.array_key(values)?;
                 rt.vars.delete(array, &key_str)?;
                 Ok(None)
             },
@@ -395,6 +396,58 @@ mod tests {
         assert_eq!(
             rt.vars.get("a", Some("3")).unwrap(),
             Value::from(20.0),
+            "{:?}",
+            stmt
+        );
+    }
+
+    #[test]
+    fn delete_subsep() {
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
+        let stmt = get_stmt(
+            r#"{ 
+                SUBSEP = "@";
+                a[0, "c"] = 5;
+                a[1, "o"] = 10;
+                a[2, "n"] = 15;
+                a[3, "o"] = 20;
+                a[4, "r"] = 25;
+                for (i in a) {
+                    if (a[i] < 12) {
+                        delete a[i];
+                    }
+                }
+            }"#,
+        );
+        eval_stmt(&stmt, &mut rt).unwrap();
+        assert_eq!(
+            rt.vars.get("a", Some("0@c")).unwrap(),
+            Value::Uninitialised,
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            rt.vars.get("a", Some("1@o")).unwrap(),
+            Value::Uninitialised,
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            rt.vars.get("a", Some("2@n")).unwrap(),
+            Value::from(15.0),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            rt.vars.get("a", Some("3@o")).unwrap(),
+            Value::from(20.0),
+            "{:?}",
+            stmt
+        );
+        assert_eq!(
+            rt.vars.get("a", Some("4@r")).unwrap(),
+            Value::from(25.0),
             "{:?}",
             stmt
         );

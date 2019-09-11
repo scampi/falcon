@@ -101,8 +101,8 @@ impl Functions {
                         }
                     }
                 }
-                // pop the call stack
-                rt.vars.pop_local_stack();
+                // drop the call stack
+                rt.vars.drop_local_stack();
                 Ok(ret)
             },
             _ => Err(EvaluationError::UnknownFunction(name.to_owned())),

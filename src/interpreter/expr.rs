@@ -1,7 +1,7 @@
 //! Evaluates an expression based on a given runtime.
 use crate::{
     errors::EvaluationError,
-    interpreter::{value::Value, variables::Variables, Eval, RuntimeMut},
+    interpreter::{value::Value, Eval, RuntimeMut},
     parser::ast::{AssignType, Expr, ExprList, LValueType},
 };
 use regex::Regex;
@@ -88,7 +88,8 @@ impl Eval for Expr {
                     rt.record.get(index)
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    let values = key.eval(rt)?;
+                    let key_str = rt.vars.array_key(values)?;
                     rt.vars.get(name, Some(&key_str))
                 },
             },
@@ -101,7 +102,8 @@ impl Eval for Expr {
                         rt.record.set(&mut rt.vars, *ty, index, new_value)
                     },
                     LValueType::Brackets(name, key) => {
-                        let key_str = Variables::array_key(key.eval(rt)?)?;
+                        let values = key.eval(rt)?;
+                        let key_str = rt.vars.array_key(values)?;
                         rt.vars.set(*ty, name, Some(&key_str), new_value)
                     },
                 }
@@ -114,7 +116,8 @@ impl Eval for Expr {
                         .set(&mut rt.vars, AssignType::Add, index, Value::from(1))
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    let values = key.eval(rt)?;
+                    let key_str = rt.vars.array_key(values)?;
                     rt.vars
                         .set(AssignType::Add, name, Some(&key_str), Value::from(1))
                 },
@@ -127,7 +130,8 @@ impl Eval for Expr {
                         .set(&mut rt.vars, AssignType::Sub, index, Value::from(1))
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    let values = key.eval(rt)?;
+                    let key_str = rt.vars.array_key(values)?;
                     rt.vars
                         .set(AssignType::Sub, name, Some(&key_str), Value::from(1))
                 },
@@ -146,7 +150,8 @@ impl Eval for Expr {
                     value
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    let values = key.eval(rt)?;
+                    let key_str = rt.vars.array_key(values)?;
                     let value = rt.vars.get(name, Some(&key_str));
                     rt.vars
                         .set(AssignType::Add, name, Some(&key_str), Value::from(1))?;
@@ -167,7 +172,8 @@ impl Eval for Expr {
                     value
                 },
                 LValueType::Brackets(name, key) => {
-                    let key_str = Variables::array_key(key.eval(rt)?)?;
+                    let values = key.eval(rt)?;
+                    let key_str = rt.vars.array_key(values)?;
                     let value = rt.vars.get(name, Some(&key_str));
                     rt.vars
                         .set(AssignType::Sub, name, Some(&key_str), Value::from(1))?;
@@ -453,7 +459,7 @@ mod tests {
         let expr = get_expr("NF");
         let res = eval_expr(&expr, &mut rt);
         assert_eq!(res.unwrap(), Value::from(2.0));
-        assert!(!rt.vars.has_user_vars());
+        assert!(rt.vars.globals.is_empty());
 
         let expr = get_expr("nf");
         let res = eval_expr(&expr, &mut rt);

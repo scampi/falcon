@@ -15,13 +15,16 @@ struct FunctionCall {
     locals: HashMap<String, Value>,
     /// Array arguments are passed by reference.
     /// The key is the variable name as declared in the function's signature,
-    /// with the key the name of the array it references.
+    /// with the value the name of the array it references.
     references: HashMap<String, String>,
 }
 
 #[derive(Debug)]
 pub struct Variables {
+    /// The set of variables with a global scope.
     pub globals: HashMap<String, Value>,
+    /// The function calls stack. Each call to a user-defined function adds an
+    /// element to the stack.
     function_calls: Vec<FunctionCall>,
     ///// The number of arguments
     //argc: usize,
@@ -31,23 +34,30 @@ pub struct Variables {
     //env: HashMap<String, String>,
     ///// The pathname to the current input file
     //filename: String,
-    /// The ordinal number of the current record in the current file
+    /// The ordinal number of the current record in the current file.
     pub fnr: usize,
-    /// Input field separator regular expression
+    /// Input field separator regular expression.
     pub fs: String,
-    /// The number of fields in the current record
+    /// The number of fields in the current record.
     pub nf: usize,
-    /// The ordinal number of the current record from the start of input
+    /// The ordinal number of the current record from the start of input.
     pub nr: usize,
+    /// The printf format for converting numbers to strings in output
+    /// statements.
     pub ofmt: String,
+    /// The print statement output field separation.
     pub ofs: String,
+    /// The print statement output record separator.
     pub ors: String,
     //rlength: usize,
     //rs: String,
     //rstart: usize,
+    /// The subscript separator string for multi-dimensional arrays.
     pub subsep: String,
 }
 
+/// Returns true if the given variable is a special variable in AWK. A special
+/// variable cannot be re-defined in a script.
 pub fn is_special_variable(name: &str) -> bool {
     match name {
         "FNR" | "FS" | "NF" | "NR" | "OFMT" | "OFS" | "ORS" | "SUBSEP" => true,
@@ -71,11 +81,9 @@ impl Variables {
         }
     }
 
-    #[cfg(test)]
-    pub fn has_user_vars(&self) -> bool {
-        !self.globals.is_empty()
-    }
-
+    /// Add a new function call to the stack, where `locals` is the set of
+    /// variables which scope is limited to the function, and `references`
+    /// is a set of array variables that points to those in the current set.
     pub fn push_local_stack(
         &mut self,
         locals: HashMap<String, Value>,
@@ -85,10 +93,9 @@ impl Variables {
             .push(FunctionCall { locals, references });
     }
 
-    pub fn pop_local_stack(&mut self) {
-        if self.function_calls.pop().is_none() {
-            unreachable!()
-        }
+    /// Drops the last function call from the stack.
+    pub fn drop_local_stack(&mut self) {
+        self.function_calls.pop().unwrap();
     }
 
     /// Get the map of variales in which to look for the variable with the given
@@ -148,6 +155,7 @@ impl Variables {
         (vars, referred_var)
     }
 
+    /// Returns the list of keys of the given named associative array.
     pub fn array_keys(&self, name: &str) -> Result<Vec<String>, EvaluationError> {
         let (vars, referred_var) = self.get_variables_set(name);
         match vars.get(referred_var) {
@@ -160,6 +168,7 @@ impl Variables {
         }
     }
 
+    /// Deletes the element at the given key in the named array.
     pub fn delete(&mut self, name: &str, key: &str) -> Result<(), EvaluationError> {
         let (vars, referred_var) = self.get_variables_set_mut(name);
         if let Entry::Occupied(mut entry) = vars.entry(referred_var.to_owned()) {
@@ -176,14 +185,17 @@ impl Variables {
         Ok(())
     }
 
-    pub fn array_key(values: Vec<Value>) -> Result<String, EvaluationError> {
-        Ok(values
+    /// Returns the array key as string joined with the subscript separator.
+    pub fn array_key(&self, key_values: Vec<Value>) -> Result<String, EvaluationError> {
+        Ok(key_values
             .into_iter()
             .map(|v| v.as_string())
             .collect::<Vec<String>>()
-            .join(""))
+            .join(&self.subsep))
     }
 
+    /// Returns the value associated with the variable of the given name.
+    /// If a subscript is given then the variable is assumed to be an array.
     pub fn get(&self, name: &str, subscript: Option<&str>) -> Result<Value, EvaluationError> {
         match name {
             _ if is_special_variable(name) && subscript.is_some() => {
@@ -201,6 +213,8 @@ impl Variables {
         }
     }
 
+    /// Returns true if the variable of the given name is an array. The top of
+    /// the call stack is also checked.
     pub fn is_array(&self, name: &str) -> bool {
         if let Some(FunctionCall { locals, references }) = self.function_calls.last() {
             let is_array_reference = references.contains_key(name);
@@ -222,6 +236,7 @@ impl Variables {
         }
     }
 
+    /// Returns the value of the user-defined variable.
     fn get_var(&self, name: &str, subscript: Option<&str>) -> Result<Value, EvaluationError> {
         let (vars, referred_var) = self.get_variables_set(name);
         match vars.get(referred_var) {
@@ -240,6 +255,9 @@ impl Variables {
         }
     }
 
+    /// Sets the new_value to the variable of the given name. If a subscript is
+    /// given then it is assumed the variable is an array and the subscript is
+    /// the key.
     pub fn set(
         &mut self,
         ty: AssignType,
