@@ -19,21 +19,6 @@ struct FunctionCall {
     references: HashMap<String, String>,
 }
 
-impl FunctionCall {
-    /// Returns the value associated with the variable of the given name by
-    /// looking into the call stack.
-    fn get<'a>(&'a self, globals: &'a HashMap<String, Value>, name: &str) -> Option<&'a Value> {
-        if let Some(alias) = self.references.get(name) {
-            if let Some(value) = globals.get(alias) {
-                return Some(value);
-            } else {
-                unreachable!();
-            }
-        }
-        self.locals.get(name)
-    }
-}
-
 #[derive(Debug)]
 pub struct Variables {
     pub globals: HashMap<String, Value>,
@@ -106,7 +91,26 @@ impl Variables {
         }
     }
 
-    pub fn array_keys(&self, name: &str) -> Result<Vec<String>, EvaluationError> {
+    /// Get the map of variales in which to look for the variable with the given
+    /// name. A variable is looked up in a set of global variables by
+    /// default. However, the scope of a variable in a function is limited
+    /// to it. Therefore, in a function call, looking up a variable may from
+    /// the set local to a function, not the global set.
+    ///
+    /// In order to get the correct variable set, the algorithm starts from the
+    /// top of function calls:
+    /// - check locals of the call for a variable with given name, if found then
+    ///   done
+    /// - check the references
+    ///     - if missing, then done
+    ///     - if found, then check the parent call and iterate to the next call
+    ///       with the referenced name
+    ///
+    /// This method returns a tuple, with the first value being the map of
+    /// variables resolved as per above algorithm, and the second value is
+    /// the name of the variable in case the original variable was a
+    /// reference.
+    fn get_variables_set<'a>(&'a self, name: &'a str) -> (&'a HashMap<String, Value>, &'a str) {
         let mut vars = &self.globals;
         let mut referred_var = name;
         for FunctionCall { locals, references } in self.function_calls.iter().rev() {
@@ -120,25 +124,14 @@ impl Variables {
                 }
             }
         }
-
-        match vars.get(referred_var) {
-            Some(value) => match value {
-                Value::Uninitialised => Ok(Vec::new()),
-                Value::Array(array) => Ok(array.keys().map(|key| key.to_owned()).collect()),
-                _ => Err(EvaluationError::UseScalarAsArray),
-            },
-            None => Ok(Vec::new()),
-        }
+        (vars, referred_var)
     }
 
-    pub fn delete(&mut self, name: &str, key: &str) -> Result<(), EvaluationError> {
-        // To find the set of variables to delete the entry at key for the named array,
-        // start from the top of calls:
-        // - check locals of the call for a variable with given name, if found then done
-        // - check the references
-        //     - if missing, then done
-        //     - if found, then check the parent call and iterate to the next call with
-        //       the referenced name
+    /// Like `[get_variables_set]` but allows to mutate the map of variables.
+    fn get_variables_set_mut<'a>(
+        &'a mut self,
+        name: &'a str,
+    ) -> (&'a mut HashMap<String, Value>, &'a str) {
         let mut vars = &mut self.globals;
         let mut referred_var = name;
         for FunctionCall { locals, references } in self.function_calls.iter_mut().rev() {
@@ -152,6 +145,23 @@ impl Variables {
                 }
             }
         }
+        (vars, referred_var)
+    }
+
+    pub fn array_keys(&self, name: &str) -> Result<Vec<String>, EvaluationError> {
+        let (vars, referred_var) = self.get_variables_set(name);
+        match vars.get(referred_var) {
+            Some(value) => match value {
+                Value::Uninitialised => Ok(Vec::new()),
+                Value::Array(array) => Ok(array.keys().map(|key| key.to_owned()).collect()),
+                _ => Err(EvaluationError::UseScalarAsArray),
+            },
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub fn delete(&mut self, name: &str, key: &str) -> Result<(), EvaluationError> {
+        let (vars, referred_var) = self.get_variables_set_mut(name);
         if let Entry::Occupied(mut entry) = vars.entry(referred_var.to_owned()) {
             match entry.get_mut() {
                 Value::Uninitialised => (),
@@ -213,26 +223,7 @@ impl Variables {
     }
 
     fn get_var(&self, name: &str, subscript: Option<&str>) -> Result<Value, EvaluationError> {
-        // To find the set of variables to get the value from, start from the top of
-        // calls:
-        // - check locals of the call for a variable with given name, if found then done
-        // - check the references
-        //     - if missing, then done
-        //     - if found, then check the parent call and iterate to the next call with
-        //       the referenced name
-        let mut vars = &self.globals;
-        let mut referred_var = name;
-        for FunctionCall { locals, references } in self.function_calls.iter().rev() {
-            if locals.contains_key(referred_var) {
-                vars = locals;
-                break;
-            } else {
-                match references.get(referred_var) {
-                    Some(reference) => referred_var = reference,
-                    None => break,
-                }
-            }
-        }
+        let (vars, referred_var) = self.get_variables_set(name);
         match vars.get(referred_var) {
             Some(value) => match (subscript, value) {
                 (Some(..), _) if value.is_scalar() => Err(EvaluationError::UseScalarAsArray),
@@ -311,26 +302,7 @@ impl Variables {
         subscript: Option<&str>,
         new_value: Value,
     ) -> Result<Value, EvaluationError> {
-        // To find the set of variables to set the value to, start from the top of
-        // calls:
-        // - check locals of the call for a variable with given name, if found then done
-        // - check the references
-        //     - if missing, then done
-        //     - if found, then check the parent call and iterate to the next call with
-        //       the referenced name
-        let mut vars = &mut self.globals;
-        let mut referred_var = name;
-        for FunctionCall { locals, references } in self.function_calls.iter_mut().rev() {
-            if locals.contains_key(referred_var) {
-                vars = locals;
-                break;
-            } else {
-                match references.get(referred_var) {
-                    Some(reference) => referred_var = reference,
-                    None => break,
-                }
-            }
-        }
+        let (vars, referred_var) = self.get_variables_set_mut(name);
         match vars.entry(referred_var.to_owned()) {
             Entry::Occupied(mut entry) => match (subscript, entry.get_mut()) {
                 (Some(..), ref v) if v.is_scalar() => Err(EvaluationError::UseScalarAsArray),
