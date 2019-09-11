@@ -313,6 +313,7 @@ impl Variables {
         }
     }
 
+    /// Sets a user-defined variable with the given new_value.
     fn set_var(
         &mut self,
         ty: AssignType,

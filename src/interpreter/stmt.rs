@@ -158,7 +158,7 @@ mod tests {
         let mut out = Cursor::new(Vec::new());
         let mut rt = Runtime::new(Program::empty(), &mut out).unwrap();
         let stmt = get_stmt(r#"if ($0 == 1) { a = "OK" } else { a = "KO" }"#);
-        rt.set_next_record("1".to_owned());
+        rt.set_next_record("1".to_owned()).unwrap();
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
             rt.vars.get("a", None).unwrap(),
@@ -167,7 +167,7 @@ mod tests {
             stmt
         );
 
-        rt.set_next_record("2".to_owned());
+        rt.set_next_record("2".to_owned()).unwrap();
         eval_stmt(&stmt, &mut rt).unwrap();
         assert_eq!(
             rt.vars.get("a", None).unwrap(),

@@ -1,3 +1,4 @@
+//! The functions modules handles AWK's builtins and user-defined functions.
 use crate::{
     errors::EvaluationError,
     interpreter::{
@@ -27,6 +28,7 @@ impl Functions {
         }
     }
 
+    /// Loads the definition of a function.
     pub fn load_function(&mut self, function: Item) -> Result<(), EvaluationError> {
         if let Item::FunctionDef(name, ..) = &function {
             match self.funcs.entry(name.to_owned()) {
@@ -43,6 +45,7 @@ impl Functions {
         Ok(())
     }
 
+    /// Evaluates a function of the given name with the given arguments.
     pub fn call<Output>(
         &self,
         name: &str,

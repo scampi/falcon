@@ -125,11 +125,12 @@ where
     }
 
     /// Sets the next input line.
-    pub fn set_next_record(&mut self, record: String) {
-        self.record.update_record(&mut self.vars, record);
+    pub fn set_next_record(&mut self, record: String) -> Result<(), EvaluationError> {
+        self.record.update_record(&mut self.vars, record)?;
         // update record numbers
         self.vars.fnr += 1;
         self.vars.nr += 1;
+        Ok(())
     }
 
     /// Evaluates the `BEGIN` patterns in order they appear in the script
@@ -520,7 +521,7 @@ mod tests {
 
         rt.execute_begin_patterns().unwrap();
         for line in input.lines() {
-            rt.set_next_record(line.to_owned());
+            rt.set_next_record(line.to_owned()).unwrap();
             rt.execute_main_patterns().unwrap();
         }
         rt.execute_end_patterns().unwrap();
@@ -542,7 +543,7 @@ mod tests {
 
         rt.execute_begin_patterns().unwrap();
         for line in input.lines() {
-            rt.set_next_record(line.to_owned());
+            rt.set_next_record(line.to_owned()).unwrap();
             rt.execute_main_patterns().unwrap();
         }
         rt.execute_end_patterns().unwrap();
@@ -566,7 +567,7 @@ mod tests {
         let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         for line in input.lines() {
-            rt.set_next_record(line.to_owned());
+            rt.set_next_record(line.to_owned()).unwrap();
             rt.execute_main_patterns().unwrap();
         }
 
@@ -592,7 +593,7 @@ mod tests {
         let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         for line in input.lines() {
-            rt.set_next_record(line.to_owned());
+            rt.set_next_record(line.to_owned()).unwrap();
             rt.execute_main_patterns().unwrap();
         }
         assert_eq!(
@@ -620,7 +621,7 @@ a b"#;
         let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         for line in input.lines() {
-            rt.set_next_record(line.to_owned());
+            rt.set_next_record(line.to_owned()).unwrap();
             rt.execute_main_patterns().unwrap();
         }
         let mut keys = rt.vars.array_keys("c").unwrap();
@@ -643,7 +644,7 @@ a b"#;
         let mut out = Cursor::new(Vec::new());
         let mut rt = Runtime::new(prog, &mut out).unwrap();
 
-        rt.set_next_record(input.to_owned());
+        rt.set_next_record(input.to_owned()).unwrap();
         rt.execute_main_patterns().unwrap();
         assert_eq!(
             rt.vars.get("a", None).unwrap(),
@@ -673,7 +674,7 @@ a b"#;
         let mut out = Cursor::new(Vec::new());
         let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_begin_patterns().unwrap();
-        rt.set_next_record(input.to_owned());
+        rt.set_next_record(input.to_owned()).unwrap();
         rt.execute_main_patterns().unwrap();
         let keys = rt.vars.array_keys("arr").unwrap();
         assert_eq!(keys.len(), 2);
@@ -691,7 +692,7 @@ a b"#;
         let mut out = Cursor::new(Vec::new());
         let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_begin_patterns().unwrap();
-        rt.set_next_record(input.to_owned());
+        rt.set_next_record(input.to_owned()).unwrap();
         rt.execute_main_patterns().unwrap();
         let keys = rt.vars.array_keys("arr").unwrap();
         assert_eq!(keys.len(), 3);
@@ -713,7 +714,7 @@ a b"#;
         let mut out = Cursor::new(Vec::new());
         let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_begin_patterns().unwrap();
-        rt.set_next_record(input.to_owned());
+        rt.set_next_record(input.to_owned()).unwrap();
         rt.execute_main_patterns().unwrap();
         let keys = rt.vars.array_keys("arr").unwrap();
         assert_eq!(keys.len(), 4);
@@ -739,7 +740,7 @@ a b"#;
         let mut out = Cursor::new(Vec::new());
         let mut rt = Runtime::new(prog, &mut out).unwrap();
         rt.execute_begin_patterns().unwrap();
-        rt.set_next_record(input.to_owned());
+        rt.set_next_record(input.to_owned()).unwrap();
         rt.execute_main_patterns().unwrap();
         let keys = rt.vars.array_keys("arr").unwrap();
         assert_eq!(keys.len(), 3);

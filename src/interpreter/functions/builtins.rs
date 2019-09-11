@@ -1,3 +1,4 @@
+//! Evaluates AWK's reserved functions.
 use crate::{
     errors::EvaluationError,
     interpreter::{rnd::Rnd, stmt::formatting::sprintf, value::Value, RuntimeMut},
@@ -5,6 +6,7 @@ use crate::{
 };
 use std::io::Write;
 
+/// Returns true if the given name is a builtin.
 pub fn is_builtin(name: &str) -> bool {
     match name {
         "atan2" | "close" | "cos" | "exp" | "gsub" | "index" | "int" | "length" | "log"
@@ -14,6 +16,7 @@ pub fn is_builtin(name: &str) -> bool {
     }
 }
 
+/// Evalues the named builtin with the given arguments.
 pub fn call_builtin<Output>(
     name: &str,
     args: &ExprList,

@@ -117,7 +117,7 @@ fn run_program(program: Program, inputs: Vec<PathBuf>) -> Result<(), EvaluationE
                     Ok(l) => l,
                     Err(e) => return Err(EvaluationError::IoError(input.display().to_string(), e)),
                 };
-                rt.set_next_record(line);
+                rt.set_next_record(line)?;
                 rt.execute_main_patterns()?;
             }
         }
@@ -125,7 +125,7 @@ fn run_program(program: Program, inputs: Vec<PathBuf>) -> Result<(), EvaluationE
         let stdin = io::stdin();
         let handle = stdin.lock();
         for line in handle.lines() {
-            rt.set_next_record(line?);
+            rt.set_next_record(line?)?;
             rt.execute_main_patterns()?;
         }
     }

@@ -1,3 +1,4 @@
+//! Random implementation in AWK.
 use crate::{
     errors::EvaluationError,
     interpreter::{value::Value, Eval, RuntimeMut},
@@ -23,6 +24,7 @@ impl Rnd {
         }
     }
 
+    /// Evaluates the arguments passed to the `srand` builtin.
     pub fn srand_arg<Output: Write>(
         args: &ExprList,
         rt: &mut RuntimeMut<'_, Output>,
@@ -43,6 +45,7 @@ impl Rnd {
         }
     }
 
+    /// Evaluates the srand builtin with the given seed.
     pub fn srand(&mut self, seed: u64) -> Result<Value, EvaluationError> {
         self.rng = StdRng::seed_from_u64(seed);
         match self.seed.replace(seed) {
@@ -51,6 +54,7 @@ impl Rnd {
         }
     }
 
+    /// Evaluates the rand builtin.
     pub fn rand(&mut self, args: &ExprList) -> Result<Value, EvaluationError> {
         match args.0.as_slice() {
             [] => Ok(Value::from(self.rng.gen::<f64>())),
