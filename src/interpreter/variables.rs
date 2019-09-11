@@ -107,20 +107,27 @@ impl Variables {
     }
 
     pub fn array_keys(&self, name: &str) -> Result<Vec<String>, EvaluationError> {
-        let _keys = |value: &Value| match value {
-            Value::Uninitialised => Ok(Vec::new()),
-            Value::Array(array) => Ok(array.keys().map(|key| key.to_owned()).collect()),
-            _ => return Err(EvaluationError::UseScalarAsArray),
-        };
-        if let Some(function_call) = self.function_calls.last() {
-            if let Some(value) = function_call.get(&self.globals, name) {
-                return _keys(value);
+        let mut vars = &self.globals;
+        let mut referred_var = name;
+        for FunctionCall { locals, references } in self.function_calls.iter().rev() {
+            if locals.contains_key(referred_var) {
+                vars = locals;
+                break;
+            } else {
+                match references.get(referred_var) {
+                    Some(reference) => referred_var = reference,
+                    None => break,
+                }
             }
         }
-        if let Some(value) = self.globals.get(name) {
-            _keys(value)
-        } else {
-            Ok(Vec::new())
+
+        match vars.get(referred_var) {
+            Some(value) => match value {
+                Value::Uninitialised => Ok(Vec::new()),
+                Value::Array(array) => Ok(array.keys().map(|key| key.to_owned()).collect()),
+                _ => Err(EvaluationError::UseScalarAsArray),
+            },
+            None => Ok(Vec::new()),
         }
     }
 

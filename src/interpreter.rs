@@ -818,7 +818,7 @@ a b"#;
 
             function test3(b, a) {
                 a[0]--;
-                b[0]++;
+                b[0] = b[0] a[0];
             }
 
             BEGIN { a[0] = 1; test1(a) }
@@ -828,6 +828,32 @@ a b"#;
         let mut rt = Runtime::new(prog, &mut out).unwrap();
 
         rt.execute_begin_patterns().unwrap();
-        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::from(2));
+        assert_eq!(rt.vars.get("a", Some("0")).unwrap(), Value::from("1-2"));
+    }
+
+    #[test]
+    fn function_calls_array_keys() {
+        let prog = get_program(
+            r#"
+            function test1(c) {
+                c[2] = 2;
+                test2(c)
+            }
+
+            function test2(b) {
+                b[3] = 3;
+                for (key in b) {
+                    sum += key;
+                }
+            }
+
+            BEGIN { a[1] = 1; test1(a) }
+        "#,
+        );
+        let mut out = Cursor::new(Vec::new());
+        let mut rt = Runtime::new(prog, &mut out).unwrap();
+
+        rt.execute_begin_patterns().unwrap();
+        assert_eq!(rt.vars.get("sum", None).unwrap(), Value::from(6));
     }
 }
