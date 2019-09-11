@@ -76,9 +76,9 @@ impl Eval for Expr {
             Expr::LogicalNot(e) => Ok(Value::from(!e.eval(rt)?.as_bool())),
             Expr::Conditional(cond, ok, ko) => {
                 if cond.eval(rt)?.as_bool() {
-                    Ok(Value::from(ok.eval(rt)?))
+                    ok.eval(rt)
                 } else {
-                    Ok(Value::from(ko.eval(rt)?))
+                    ko.eval(rt)
                 }
             },
             Expr::LValue(lvalue) => match lvalue {

@@ -288,14 +288,14 @@ impl Conversion {
         } else if value >= 1_f64 {
             let mut exp = 0;
             while value > 10_f64 {
-                value = value / 10_f64;
+                value /= 10_f64;
                 exp += 1;
             }
             (value, exp)
         } else {
             let mut exp = 0;
             while value < 1_f64 {
-                value = value * 10_f64;
+                value *= 10_f64;
                 exp += 1;
             }
             (value, -exp)
@@ -449,14 +449,14 @@ pub fn convert_values<
                 Err(err) => write!(output, "{}", err)?,
             },
             '\\' => match format_iter.next().unwrap() {
-                '\\' => write!(output, "{}", '\\')?,
-                'a' => write!(output, "{}", '\x07')?,
-                'b' => write!(output, "{}", '\x08')?,
-                'f' => write!(output, "{}", '\x0C')?,
-                'n' => write!(output, "{}", '\n')?,
-                'r' => write!(output, "{}", '\r')?,
-                't' => write!(output, "{}", '\t')?,
-                'v' => write!(output, "{}", '\x0B')?,
+                '\\' => write!(output, "\\")?,
+                'a' => write!(output, "\x07")?,
+                'b' => write!(output, "\x08")?,
+                'f' => write!(output, "\x0C")?,
+                'n' => write!(output, "\n")?,
+                'r' => write!(output, "\r")?,
+                't' => write!(output, "\t")?,
+                'v' => write!(output, "\x0B")?,
                 _ => unimplemented!(),
             },
             _ => write!(output, "{}", c)?,
@@ -482,7 +482,7 @@ pub fn sprintf<Output: Write>(
     let format_iter = format.chars();
 
     let mut values = Vec::new();
-    while let Some(expr) = iter.next() {
+    for expr in iter {
         values.push(expr.eval(rt)?);
     }
 
@@ -514,7 +514,7 @@ where
     let format_iter = format.chars();
 
     let mut values = Vec::new();
-    while let Some(expr) = iter.next() {
+    for expr in iter {
         values.push(expr.eval(rt)?);
     }
 
@@ -535,14 +535,14 @@ fn print_escaped_characters<Output: Write>(
     while let Some(c) = iter.next() {
         match c {
             '\\' => match iter.next().unwrap() {
-                '\\' => write!(output, "{}", '\\')?,
-                'a' => write!(output, "{}", '\x07')?,
-                'b' => write!(output, "{}", '\x08')?,
-                'f' => write!(output, "{}", '\x0C')?,
-                'n' => write!(output, "{}", '\n')?,
-                'r' => write!(output, "{}", '\r')?,
-                't' => write!(output, "{}", '\t')?,
-                'v' => write!(output, "{}", '\x0B')?,
+                '\\' => write!(output, "\\")?,
+                'a' => write!(output, "\x07")?,
+                'b' => write!(output, "\x08")?,
+                'f' => write!(output, "\x0C")?,
+                'n' => write!(output, "\n")?,
+                'r' => write!(output, "\r")?,
+                't' => write!(output, "\t")?,
+                'v' => write!(output, "\x0B")?,
                 _ => unimplemented!(),
             },
             _ => write!(output, "{}", c)?,

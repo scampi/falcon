@@ -30,19 +30,19 @@ pub fn replace<Output: Write>(
         .collect::<Vec<usize>>();
     for i in ampersands.into_iter() {
         if i == 0 {
-            repl.replace_range(i..i + 1, &input[start..end]);
+            repl.replace_range(i..=i, &input[start..end]);
         } else if i == 1 {
             match repl.get(i - 1..i) {
                 // FIXME: print a warning that an escaped & was treated as a plain &
-                Some("\\") => repl.replace_range(i - 1..i + 1, &input[start..end]),
-                _ => repl.replace_range(i..i + 1, &input[start..end]),
+                Some("\\") => repl.replace_range(i - 1..=i, &input[start..end]),
+                _ => repl.replace_range(i..=i, &input[start..end]),
             }
         } else {
             match (repl.get(i - 1..i), repl.get(i - 1..i)) {
-                (Some("\\"), Some("\\")) => repl.replace_range(i - 2..i + 1, "&"),
+                (Some("\\"), Some("\\")) => repl.replace_range(i - 2..=i, "&"),
                 // FIXME: print a warning that an escaped & was treated as a plain &
-                (Some(_), Some("\\")) => repl.replace_range(i - 1..i + 1, &input[start..end]),
-                _ => repl.replace_range(i..i + 1, &input[start..end]),
+                (Some(_), Some("\\")) => repl.replace_range(i - 1..=i, &input[start..end]),
+                _ => repl.replace_range(i..=i, &input[start..end]),
             }
         }
     }

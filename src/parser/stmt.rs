@@ -49,7 +49,7 @@ parser! {
                 attempt(parse_do_while()),
                 attempt(parse_for()),
                 attempt(parse_for_in()),
-                attempt(parse_stmt_list().map(|stmts| Stmt::Block(stmts))),
+                attempt(parse_stmt_list().map(Stmt::Block)),
             ))
             .skip(skip_many(one_of(" \r\n\t;".chars())))
         )
@@ -66,7 +66,7 @@ parser! {
         between(
             skip_wrapping_newlines(skip_wrapping_spaces(char('{'))),
             skip_wrapping_newlines(skip_wrapping_spaces(char('}'))),
-            many::<Vec<Stmt>, _>(parse_stmt()).map(|stmts| StmtList(stmts)),
+            many::<Vec<Stmt>, _>(parse_stmt()).map(StmtList),
         )
     }
 }
@@ -91,7 +91,7 @@ parser! {
                 .with(parse_stmt())
             )),
         )
-        .map(|(_, cond, ok, ko)| Stmt::IfElse(cond, Box::new(ok), ko.map(|v| Box::new(v))))
+        .map(|(_, cond, ok, ko)| Stmt::IfElse(cond, Box::new(ok), ko.map(Box::new)))
     }
 }
 
@@ -151,9 +151,9 @@ parser! {
         )
         .map(|(_, start, _, until, _, step, _, body)|
             Stmt::For(
-                start.map(|s| Box::new(s)),
+                start.map(Box::new),
                 until,
-                step.map(|s| Box::new(s)),
+                step.map(Box::new),
                 Box::new(body)
             )
         )
@@ -193,10 +193,10 @@ parser! {
             skip_wrapping_spaces(string("next")).map(|_| Stmt::Next),
             skip_wrapping_spaces(string("exit"))
                 .with(optional(parse_expr()))
-                .map(|code| Stmt::Exit(code)),
+                .map(Stmt::Exit),
             skip_wrapping_spaces(string("return"))
                 .with(optional(parse_expr()))
-                .map(|code| Stmt::Return(code)),
+                .map(Stmt::Return),
         ))
     }
 }
@@ -209,7 +209,7 @@ parser! {
     ]
     {
         choice((
-            attempt(parse_expr().map(|e| Stmt::Expr(e))),
+            attempt(parse_expr().map(Stmt::Expr)),
             attempt(parse_delete()),
             attempt(parse_print_stmt()),
         ))
@@ -287,11 +287,11 @@ parser! {
     {
         choice((
             attempt(skip_wrapping_spaces(string(">>")).with(parse_print_expr()))
-                .map(|expr| OutputRedirection::Append(expr)),
+                .map(OutputRedirection::Append),
             attempt(skip_wrapping_spaces(char('>')).with(parse_print_expr()))
-                .map(|expr| OutputRedirection::Truncate(expr)),
+                .map(OutputRedirection::Truncate),
             attempt(skip_wrapping_spaces(char('|')).with(parse_print_expr()))
-                .map(|expr| OutputRedirection::Pipe(expr)),
+                .map(OutputRedirection::Pipe),
         ))
     }
 }

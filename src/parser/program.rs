@@ -45,7 +45,7 @@ parser! {
     {
         let seps1 = skip_many(one_of(" \t\r\n;".chars()));
         let seps2 = skip_many(one_of(" \t\r\n;".chars()));
-        many(seps1.with(parse_item().skip(seps2))).map(|items| Program::new(items))
+        many(seps1.with(parse_item().skip(seps2))).map(Program::new)
     }
 }
 

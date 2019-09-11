@@ -98,7 +98,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by(parse_print_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+        sep_by(parse_print_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(ExprList)
     }
 }
 
@@ -109,7 +109,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by1(parse_print_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+        sep_by1(parse_print_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(ExprList)
     }
 }
 
@@ -120,7 +120,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by(parse_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+        sep_by(parse_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(ExprList)
     }
 }
 
@@ -131,7 +131,7 @@ parser! {
         I::Error: ParseError<I::Item, I::Range, I::Position>,
     ]
     {
-        sep_by1(parse_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(|exprs| ExprList(exprs))
+        sep_by1(parse_expr(), attempt(skip_all_wrapping_spaces(char(',')))).map(ExprList)
     }
 }
 
@@ -149,7 +149,7 @@ parser! {
                 Expr::UnaryMinus(minus) => Expr::UnaryMinus(Box::new(Expr::Pow(minus, Box::new(re)))),
                 Expr::UnaryPlus(plus) => Expr::UnaryPlus(Box::new(Expr::Pow(plus, Box::new(re)))),
                 Expr::LogicalNot(not) => Expr::LogicalNot(Box::new(Expr::Pow(not, Box::new(re)))),
-                le @ _ => Expr::Pow(Box::new(le), Box::new(re)),
+                _ => Expr::Pow(Box::new(le), Box::new(re)),
             }
         }
 
@@ -476,7 +476,7 @@ parser! {
     ]
     {
         choice((
-            attempt(parse_string()).map(|s: String| Expr::String(s)),
+            attempt(parse_string()).map(Expr::String),
             attempt(parse_regexp()).and_then(|ere: String| {
                 match Regex::new(&ere) {
                     Ok(ere) => Ok(Expr::Regexp(RegexEq(ere))),
@@ -497,10 +497,10 @@ parser! {
             attempt(parse_assignment()),
             attempt(skip_wrapping_spaces(string("++")))
                     .with(parse_lvalue())
-                    .map(|lvalue| Expr::PreIncrement(lvalue)),
+                    .map(Expr::PreIncrement),
             attempt(skip_wrapping_spaces(string("--")))
                     .with(parse_lvalue())
-                    .map(|lvalue| Expr::PreDecrement(lvalue)),
+                    .map(Expr::PreDecrement),
             attempt(skip_wrapping_spaces(char('+')))
                     .with(leaf())
                     .map(|expr| Expr::UnaryPlus(Box::new(expr))),
@@ -513,12 +513,12 @@ parser! {
             attempt(
                 parse_lvalue()
                     .skip(skip_wrapping_spaces(string("++")))
-                    .map(|lvalue| Expr::PostIncrement(lvalue)),
+                    .map(Expr::PostIncrement),
             ),
             attempt(
                 parse_lvalue()
                     .skip(skip_wrapping_spaces(string("--")))
-                    .map(|lvalue| Expr::PostDecrement(lvalue)),
+                    .map(Expr::PostDecrement),
             ),
             attempt(
                 parse_func_name()
@@ -531,7 +531,7 @@ parser! {
                 )
                 .map(|(func_name, args)| Expr::FunctionCall(func_name, args)),
             ),
-            attempt(parse_lvalue()).map(|lvalue| Expr::LValue(lvalue)),
+            attempt(parse_lvalue()).map(Expr::LValue),
         ))
     }
 }
@@ -552,7 +552,7 @@ parser! {
                     let fnum = f.parse::<f64>().unwrap();
                     inum += fnum / (10 * f.len()) as f64;
                 }
-                if inum.signum() == 1.0 {
+                if inum.signum() > 0.0 {
                     Expr::Number(inum)
                 } else {
                     Expr::UnaryMinus(Box::new(Expr::Number(-inum)))
@@ -581,7 +581,7 @@ parser! {
             attempt(skip_whitespaces().skip(char('$')))
             .with(leaf())
             .map(|expr| LValueType::Dollar(Box::new(expr))),
-            attempt(parse_var_name().map(|name| LValueType::Name(name))),
+            attempt(parse_var_name().map(LValueType::Name)),
         ))
     }
 }

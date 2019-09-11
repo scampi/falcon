@@ -334,7 +334,7 @@ impl Variables {
                     Ok(result)
                 },
                 (None, Value::Uninitialised) => {
-                    let result = Value::from(Value::compute(ty, Value::Uninitialised, new_value)?);
+                    let result = Value::compute(ty, Value::Uninitialised, new_value)?;
                     entry.insert(result.clone());
                     Ok(result)
                 },
@@ -351,7 +351,7 @@ impl Variables {
                     },
                 },
                 (None, value) => {
-                    let result = Value::from(Value::compute(ty, value.clone(), new_value)?);
+                    let result = Value::compute(ty, value.clone(), new_value)?;
                     entry.insert(result.clone());
                     Ok(result)
                 },
@@ -366,7 +366,7 @@ impl Variables {
                     Ok(result)
                 },
                 None => {
-                    let result = Value::from(Value::compute(ty, Value::Uninitialised, new_value)?);
+                    let result = Value::compute(ty, Value::Uninitialised, new_value)?;
                     entry.insert(result.clone());
                     Ok(result)
                 },
