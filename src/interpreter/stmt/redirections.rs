@@ -1,3 +1,4 @@
+//! This module handles redirecting the standard output into a file.
 use crate::{
     errors::EvaluationError,
     interpreter::{Eval, RuntimeMut},
@@ -9,6 +10,7 @@ use std::{
     io::Write,
 };
 
+/// Returns the file name to redirect to.
 pub fn file_name<Output: Write>(
     rt: &mut RuntimeMut<'_, Output>,
     redir: &OutputRedirection,
@@ -21,6 +23,7 @@ pub fn file_name<Output: Write>(
     }
 }
 
+/// A struct containing the list of open Files.
 #[derive(Debug)]
 pub struct Redirections {
     files: HashMap<String, File>,
@@ -33,6 +36,8 @@ impl Redirections {
         }
     }
 
+    /// Initialise the file at path for redirection. It is truncated if
+    /// OutputRedirection::Truncate.
     pub fn add_file(
         &mut self,
         path: &str,
@@ -60,6 +65,7 @@ impl Redirections {
         Ok(())
     }
 
+    /// Returns the file handle for the given path.
     pub fn get_file(&mut self, path: &str) -> &mut File {
         self.files.get_mut(path).unwrap()
     }

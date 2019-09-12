@@ -1,3 +1,4 @@
+//! This modules handles custom formatting of values into a string.
 use crate::{
     errors::EvaluationError,
     interpreter::{
@@ -13,19 +14,30 @@ use std::{
     iter::once,
 };
 
+/// Conversion describes the file formatting notation for transforming a value
+/// into a string.
 #[derive(Debug, Default)]
 struct Conversion {
+    /// Whether the value should be justified to the left.
     left_justified: bool,
+    /// For a positive number, this adds the plus sign symbol.
     signed: bool,
+    /// For a positive number, this leaves a leading whitespace.
     space: bool,
     alternative_form: bool,
+    /// Whether or not a number should have leading zeros.
     leading_zeros: bool,
+    /// The minimum length of the stringification of a value.
     width: Option<usize>,
+    /// Sets the fractional length for a number
     precision: Option<usize>,
     specifier: ConversionSpecifier,
 }
 
 impl Conversion {
+    /// Creates a new `Conversion` that is defined by the input char stream.
+    /// If the conversion specification is invalid, then it is left as is and is
+    /// returned in error.
     fn new<I: Iterator<Item = char>>(iter: &mut I) -> Result<Conversion, String> {
         let mut conv: Conversion = Default::default();
         let mut err = String::new();
@@ -91,6 +103,7 @@ impl Conversion {
         Err(err)
     }
 
+    /// Converts the value and writes the formatted string to the output.
     fn convert<Output: Write>(
         &self,
         output: &mut Output,
@@ -280,6 +293,8 @@ impl Conversion {
         Ok(())
     }
 
+    /// Computes the exponent components of a number. It returns a tuple with
+    /// the mantissa and the exponent.
     fn exponent(value: f64) -> (f64, isize) {
         let mut value = value.abs();
 
@@ -336,6 +351,7 @@ impl Conversion {
         Conversion::fract(output, precision, value.fract())
     }
 
+    /// Writes the sign of the value to the output.
     fn sign<Output: Write>(&self, output: &mut Output, value: f64) -> Result<(), EvaluationError> {
         if value.is_sign_positive() {
             if self.signed {
@@ -349,6 +365,7 @@ impl Conversion {
         Ok(())
     }
 
+    /// Writes the fractional part to the output rounded to precision.
     fn fract<Output: Write>(
         output: &mut Output,
         precision: usize,
@@ -427,6 +444,8 @@ impl ConversionSpecifier {
     }
 }
 
+/// Replaces all conversions with the corresponding stringified value and writes
+/// the result to the output.
 pub fn convert_values<
     FormatIterator: Iterator<Item = char>,
     ValueIterator: Iterator<Item = Value>,
@@ -527,6 +546,7 @@ where
     }
 }
 
+/// Evaluates escaped characters.
 fn print_escaped_characters<Output: Write>(
     output: &mut Output,
     value: String,
