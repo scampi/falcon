@@ -154,3 +154,47 @@ fn length_too_many_args() {
             .should_fail(),
     );
 }
+
+#[test]
+fn split() {
+    let script = r#"
+        BEGIN {
+            n = split("aaa bbb ccc", a);
+            if (n != 3 || a[1] != "aaa" || a[2] != "bbb" || a[3] != "ccc") {
+                print "KO";
+            }
+        }
+    "#;
+    run_test(Test::new(&script));
+
+    let script = r#"
+        BEGIN {
+            a[4] = "nope";
+            n = split("aaa bbb ccc", a);
+            if (n != 3 || a[1] != "aaa" || a[2] != "bbb" || a[3] != "ccc") {
+                print "KO";
+            }
+        }
+    "#;
+    run_test(Test::new(&script));
+
+    let script = r#"
+        BEGIN {
+            n = split("a1b2c3d", a, /[0-9]/);
+            if (n != 4 || a[1] != "a" || a[2] != "b" || a[3] != "c" || a[4] != "d") {
+                print "KO", n, a[1], a[2], a[3], a[4];
+            }
+        }
+    "#;
+    run_test(Test::new(&script));
+
+    let script = r#"
+        BEGIN {
+            FS = "[0-9]";
+            n = split("a1b2c3d45", a);
+            if (n != 6 || a[1] != "a" || a[2] != "b" || a[3] != "c" || a[4] != "d" || a[5] != "" || a[6] != "") {
+                print "KO", n, a[1], a[2], a[3], a[4], a[5], a[6];
+            }
+        }"#;
+    run_test(Test::new(&script));
+}

@@ -43,6 +43,7 @@ where
         "sprintf" => sprintf(args, rt),
         "sub" => substitute::sub(args, rt),
         "length" => length::execute(args, rt),
+        "split" => split::execute(args, rt),
         _ => unreachable!(),
     }
 }
@@ -56,6 +57,7 @@ mod sin;
 // String functions
 mod index;
 mod length;
+pub mod split;
 mod substitute;
 mod substr;
 mod tolower;

@@ -695,18 +695,26 @@ a b"#;
         rt.set_next_record(input.to_owned()).unwrap();
         rt.execute_main_patterns().unwrap();
         let keys = rt.vars.array_keys("arr").unwrap();
-        assert_eq!(keys.len(), 3);
+        assert_eq!(keys.len(), 5);
         assert_eq!(
             rt.vars.get("arr", Some("1")).unwrap(),
-            Value::from("here".to_owned())
+            Value::from(String::new())
         );
         assert_eq!(
             rt.vars.get("arr", Some("2")).unwrap(),
-            Value::from("you".to_owned())
+            Value::from("here".to_owned())
         );
         assert_eq!(
             rt.vars.get("arr", Some("3")).unwrap(),
+            Value::from("you".to_owned())
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("4")).unwrap(),
             Value::from("were".to_owned())
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("5")).unwrap(),
+            Value::from(String::new())
         );
 
         let input = "abcthisadcarcisaechere";
@@ -717,21 +725,25 @@ a b"#;
         rt.set_next_record(input.to_owned()).unwrap();
         rt.execute_main_patterns().unwrap();
         let keys = rt.vars.array_keys("arr").unwrap();
-        assert_eq!(keys.len(), 4);
+        assert_eq!(keys.len(), 5);
         assert_eq!(
             rt.vars.get("arr", Some("1")).unwrap(),
-            Value::from("this".to_owned())
-        );
-        assert_eq!(
-            rt.vars.get("arr", Some("2")).unwrap(),
             Value::from(String::new())
         );
         assert_eq!(
+            rt.vars.get("arr", Some("2")).unwrap(),
+            Value::from("this".to_owned())
+        );
+        assert_eq!(
             rt.vars.get("arr", Some("3")).unwrap(),
-            Value::from("is".to_owned())
+            Value::from(String::new())
         );
         assert_eq!(
             rt.vars.get("arr", Some("4")).unwrap(),
+            Value::from("is".to_owned())
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("5")).unwrap(),
             Value::from("here".to_owned())
         );
 
@@ -743,17 +755,21 @@ a b"#;
         rt.set_next_record(input.to_owned()).unwrap();
         rt.execute_main_patterns().unwrap();
         let keys = rt.vars.array_keys("arr").unwrap();
-        assert_eq!(keys.len(), 3);
+        assert_eq!(keys.len(), 4);
         assert_eq!(
             rt.vars.get("arr", Some("1")).unwrap(),
-            Value::from("this".to_owned())
+            Value::from(String::new())
         );
         assert_eq!(
             rt.vars.get("arr", Some("2")).unwrap(),
-            Value::from("is".to_owned())
+            Value::from("this".to_owned())
         );
         assert_eq!(
             rt.vars.get("arr", Some("3")).unwrap(),
+            Value::from("is".to_owned())
+        );
+        assert_eq!(
+            rt.vars.get("arr", Some("4")).unwrap(),
             Value::from("here".to_owned())
         );
     }

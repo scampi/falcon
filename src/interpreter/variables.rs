@@ -168,6 +168,19 @@ impl Variables {
         }
     }
 
+    /// Deletes all elements in the named array.
+    pub fn clear(&mut self, name: &str) -> Result<(), EvaluationError> {
+        let (vars, referred_var) = self.get_variables_set_mut(name);
+        if let Entry::Occupied(mut entry) = vars.entry(referred_var.to_owned()) {
+            match entry.get_mut() {
+                Value::Uninitialised => (),
+                Value::Array(array) => array.clear(),
+                _ => return Err(EvaluationError::UseScalarAsArray),
+            }
+        }
+        Ok(())
+    }
+
     /// Deletes the element at the given key in the named array.
     pub fn delete(&mut self, name: &str, key: &str) -> Result<(), EvaluationError> {
         let (vars, referred_var) = self.get_variables_set_mut(name);

@@ -1,11 +1,9 @@
 //! The record module handles an input row and splits it on the `FS` separator.
 use crate::{
     errors::EvaluationError,
-    interpreter::{value::Value, variables::Variables},
+    interpreter::{functions::builtins::split::split_on_fs, value::Value, variables::Variables},
     parser::ast::AssignType,
 };
-use lazy_static::lazy_static;
-use regex::Regex;
 
 /// An input row.
 #[derive(Debug)]
@@ -35,28 +33,7 @@ impl Record {
         record: String,
     ) -> Result<(), EvaluationError> {
         self.record = record;
-        self.fields = if vars.fs == " " {
-            lazy_static! {
-                static ref FS_REGEX: Regex = Regex::new(r"[ \t]+").unwrap();
-            }
-            FS_REGEX
-                .split(&self.record)
-                .skip_while(|s| s.is_empty())
-                .map(|s| s.to_owned())
-                .collect()
-        } else if vars.fs.len() == 1 {
-            self.record.split(&vars.fs).map(|s| s.to_owned()).collect()
-        } else {
-            let fs_pattern = match Regex::new(&vars.fs) {
-                Ok(p) => p,
-                Err(e) => return Err(EvaluationError::InvalidRegex(e)),
-            };
-            fs_pattern
-                .split(&self.record)
-                .skip_while(|s| s.is_empty())
-                .map(|s| s.to_owned())
-                .collect()
-        };
+        self.fields = split_on_fs(&self.record, &vars.fs)?;
         vars.nf = self.fields.len();
         Ok(())
     }

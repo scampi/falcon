@@ -4,6 +4,9 @@ use failure_derive::Fail;
 /// An error that happened during the evaluation of a script.
 #[derive(Debug, Fail)]
 pub enum EvaluationError {
+    /// A function which argument should be an array.
+    #[fail(display = "Function '{}' expects an array", _0)]
+    NotAnArray(String),
     /// A function that may be a builtin was called with an unexpected number of
     /// arguments.
     #[fail(display = "Function '{}' expects {} arguments but got {}", _0, _1, _2)]
