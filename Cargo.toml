@@ -15,7 +15,7 @@ failure_derive = "0.1"
 lazy_static = "1.3"
 rand = "0.7"
 regex = "1.2"
-structopt = { version = "0.2", features = ["color"] }
+structopt = { version = "0.3", features = ["color"] }
 
 [dev-dependencies]
 assert_cmd = "0.11"

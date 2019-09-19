@@ -22,13 +22,14 @@ mod parser;
 
 /// CLI options of the falcon binary.
 #[derive(StructOpt, Debug)]
-#[structopt(raw(setting = "AppSettings::ColoredHelp"))]
-#[structopt(raw(setting = "AppSettings::ArgRequiredElseHelp"))]
+#[structopt(author = "Stéphane Campinas", about = "An AWK interpreter")]
+#[structopt(setting = AppSettings::ColoredHelp)]
+#[structopt(setting = AppSettings::ArgRequiredElseHelp)]
 struct Cli {
     #[structopt(name = "file", short, long, value_name = "FILE", parse(from_os_str))]
     /// The path to the AWK script file to execute.
     program_file: Option<PathBuf>,
-    #[structopt(name = "dump-ast", long)]
+    #[structopt(long)]
     /// Dump the AST and exit.
     dump_ast: bool,
     #[structopt(name = "program")]
